@@ -1,0 +1,22 @@
+---
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.12.1
+    hooks:
+      - id: markdownlint-cli2
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.6
+    hooks:
+      - id: codespell
+
+# Configuration per https://pre-commit.ci/#configuration
+ci:
+  autoupdate_schedule: monthly
+  skip: [no-commit-to-branch]
+  autoupdate_commit_msg: 'ci(pre-commit.ci): pre-commit autoupdate'

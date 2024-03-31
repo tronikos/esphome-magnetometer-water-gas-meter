@@ -1,0 +1,13 @@
+---
+extends: default
+
+rules:
+  line-length:
+    level: warning
+    allow-non-breakable-inline-mappings: true
+  truthy:
+    check-keys: false
+
+ignore: |
+  .esphome
+  .clang-format
