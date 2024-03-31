@@ -1,0 +1,180 @@
+# This config uses ESP8266 and QMC5883L, a triple-axis magnetometer, to read the rotating magnet inside your water meter.
+
+# This should be compatible will all the water meters the Flume water sensor is compatible with,
+# which is compatible with about 95% of water meters in the United States.
+# https://help.flumewater.com/en/articles/1618594-is-the-flume-device-compatible-with-all-water-meters
+
+# Good video/animation of the internals of a water meter: https://www.youtube.com/watch?v=M9nVkSZ6_H4
+
+# See Figure 1: Nutating disc operation at https://www.instrumart.com/assets/RCDL-manual.pdf
+# "The metering principle, known as positive displacement, is based on the continuous filling and discharging of the measuring
+# chamber. Controlled clearances between the disc and the chamber provide precise measurement of each volume cycle.
+# As the disc nutates, the center spindle rotates a magnet. The movement of the magnet is sensed through the meter wall
+# by a follower magnet or by various sensors. Each revolution of the magnet is equivalent to a fixed volume of fluid, which is
+# converted to any engineering unit of measure for totalization, indication or process control."
+
+substitutions:
+  # To calibrate:
+  # 1. Temporarily set qmc5883l_raw_disable to false to log Magnetic Field Strength X, Y, Z and send them to HA.
+  # 2. Run a light stream of water.
+  # 3. Observe which axis changes the most and its range.
+  # e.g. if y axis ranges from -69 to -121 use -90 to -100 as thresholds.
+  # TODO: automate this calibration with a switch in the UI
+  qmc5883l_raw_disable: 'true'
+  qmc5883l_axis: 'y'
+  threshold_upper: '-90'
+  threshold_lower: '-100'
+
+  # To calibrate:
+  # 1. Enable the "Half rotations total" sensor in HA.
+  # 2. Write it down and also write down the reading on your water meter.
+  # 3. After a few hours or even days of regular water usage, write down both of them again.
+  # 4. Divide diff of readings in gallons with diff of half rotations.
+  # 5. Disable the "Half rotations total" sensor in HA.
+  # Alternatively you can search for specifications of your specific water meter and its size. e.g.
+  # https://www.riotronics.com/wp-content/uploads/2019/11/NT10-4P-WaterRead-pdf3.01.pdf
+  # Meter size | Pulses/Gallon
+  # 5/8"       | 231.24
+  # 3/4"       | 129.04
+  # gallons_per_half_rotation: "2 / 231.24"
+  # If you have the Flume water sensor you can use its lowest reported value. You can find it with:
+  # select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;
+  gallons_per_half_rotation: '0.01008156'
+
+  # If you need to change update_interval also change oversampling so that they match.
+  # http://wiki.sunfounder.cc/images/7/72/QMC5883L-Datasheet-1.0.pdf
+  # update_interval  | 100ms | 20ms | 10ms  | 5ms
+  # output data rate | 10 Hz | 50Hz | 100Hz | 200Hz
+  # oversampling     | 512x  | 256x | 128x  | 64x
+  qmc5883l_update_interval: '10ms'
+  qmc5883l_oversampling: '128x'
+
+esphome:
+  name: water-meter
+  friendly_name: Water Meter
+
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
+
+preferences:
+  flash_write_interval: 60min
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+  services:
+    - service: set_total
+      variables:
+        new_total: int
+      then:
+        - globals.set:
+            id: half_rotations_total
+            value: !lambda 'return new_total / (${gallons_per_half_rotation});'
+
+ota:
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+globals:
+  - id: half_rotations_total
+    type: long
+    restore_value: yes
+    initial_value: '0'
+  - id: half_rotations_flow
+    type: long
+    restore_value: no
+    initial_value: '0'
+
+i2c:
+  sda: SDA # GPIO4 D2
+  scl: SCL # GPIO5 D1
+  frequency: 100kHz # qmc5883l supports 100kHz and 400kHz. Fastest output data rate is 200Hz so low-speed is fine.
+
+sensor:
+  # https://esphome.io/components/sensor/qmc5883l.html
+  - platform: qmc5883l
+    address: 0x0D
+    field_strength_x:
+      id: qmc5883l_axis_x
+      name: Magnetic Field Strength X
+      internal: ${qmc5883l_raw_disable}
+    field_strength_y:
+      id: qmc5883l_axis_y
+      name: Magnetic Field Strength Y
+      internal: ${qmc5883l_raw_disable}
+    field_strength_z:
+      id: qmc5883l_axis_z
+      name: Magnetic Field Strength Z
+      internal: ${qmc5883l_raw_disable}
+    oversampling: ${qmc5883l_oversampling}
+    update_interval: ${qmc5883l_update_interval}
+
+  - platform: template
+    name: Half rotations total
+    lambda: return id(half_rotations_total);
+    update_interval: 1s
+    disabled_by_default: true
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    state_class: 'total_increasing'
+
+  - platform: template
+    name: Total
+    lambda: return id(half_rotations_total) * (${gallons_per_half_rotation});
+    update_interval: 10s
+    accuracy_decimals: 2
+    device_class: water
+    state_class: total_increasing
+    unit_of_measurement: gal
+
+  - platform: template
+    name: Flow
+    lambda: |-
+      float flow = id(half_rotations_flow) * 6 * (${gallons_per_half_rotation});
+      id(half_rotations_flow) = 0;
+      return flow;
+    update_interval: 10s
+    accuracy_decimals: 2
+    state_class: measurement
+    unit_of_measurement: gal/min
+
+  - platform: wifi_signal
+    name: WiFi Signal
+    update_interval: 60s
+    entity_category: diagnostic
+    filters:
+      - sliding_window_moving_average:
+          window_size: 6
+          send_every: 6
+
+binary_sensor:
+  - platform: analog_threshold
+    id: magnet_analog_threshold
+    internal: true
+    sensor_id: qmc5883l_axis_${qmc5883l_axis}
+    threshold:
+      upper: ${threshold_upper}
+      lower: ${threshold_lower}
+    on_press:
+      then:
+        - lambda: |-
+            id(half_rotations_total) += 1;
+            id(half_rotations_flow) += 1;
+        - switch.turn_on: led
+    on_release:
+      then:
+        - switch.turn_off: led
+
+switch:
+  # LED flashes faster/slower as magnet rotates on water meter
+  - platform: gpio
+    id: led
+    pin:
+      number: GPIO2
+      inverted: true
