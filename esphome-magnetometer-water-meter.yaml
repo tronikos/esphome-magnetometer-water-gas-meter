@@ -68,7 +68,7 @@ api:
   services:
     - service: set_total
       variables:
-        new_total: int
+        new_total: float
       then:
         - globals.set:
             id: half_rotations_total
