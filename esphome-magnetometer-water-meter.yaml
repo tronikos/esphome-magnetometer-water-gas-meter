@@ -14,32 +14,35 @@
 # converted to any engineering unit of measure for totalization, indication or process control."
 
 substitutions:
+  # One of: CCF, ft³, gal, L, m³
+  volume_unit: 'gal'
+
   # To calibrate:
-  # 1. Temporarily set qmc5883l_raw_disable to false to log Magnetic Field Strength X, Y, Z and send them to HA.
+  # 1. Temporarily enable the Magnetic Field Strength X, Y, and Z sensors in HA.
   # 2. Run a light stream of water.
   # 3. Observe which axis changes the most and its range.
-  # e.g. if y axis ranges from -69 to -121 use -90 to -100 as thresholds.
+  # 4. Set the axis and thresholds below. e.g. if y axis ranges from -121 to -69 use -100 to -90 as thresholds.
+  # 5. Disable the Magnetic Field Strength X, Y, and Z sensors in HA. Otherwise HA recorder will get overwhelmed.
   # TODO: automate this calibration with a switch in the UI
-  qmc5883l_raw_disable: 'true'
   qmc5883l_axis: 'y'
   threshold_upper: '-90'
   threshold_lower: '-100'
 
   # To calibrate:
-  # 1. Enable the "Half rotations total" sensor in HA.
+  # 1. Temporarily enable the "Half rotations total" sensor in HA.
   # 2. Write it down and also write down the reading on your water meter.
   # 3. After a few hours or even days of regular water usage, write down both of them again.
-  # 4. Divide diff of readings in gallons with diff of half rotations.
-  # 5. Disable the "Half rotations total" sensor in HA.
+  # 4. Divide diff of readings in volume_unit with diff of half rotations.
+  # 5. Disable the "Half rotations total" sensor in HA. Otherwise HA recorder will get overwhelmed.
   # Alternatively you can search for specifications of your specific water meter and its size. e.g.
   # https://www.riotronics.com/wp-content/uploads/2019/11/NT10-4P-WaterRead-pdf3.01.pdf
   # Meter size | Pulses/Gallon
   # 5/8"       | 231.24
   # 3/4"       | 129.04
-  # gallons_per_half_rotation: "2 / 231.24"
+  # volume_per_half_rotation: "2 / 231.24"
   # If you have the Flume water sensor you can use its lowest reported value. You can find it with:
   # select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;
-  gallons_per_half_rotation: '0.01008156'
+  volume_per_half_rotation: '0.01008156'
 
   # If you need to change update_interval also change oversampling so that they match.
   # http://wiki.sunfounder.cc/images/7/72/QMC5883L-Datasheet-1.0.pdf
@@ -61,18 +64,21 @@ preferences:
   flash_write_interval: 60min
 
 logger:
+  level: INFO
 
 api:
   encryption:
     key: !secret api_encryption_key
   services:
+    # Based on https://esphome.io/components/sensor/pulse_meter.html#re-setting-the-total-pulse-count 
+    # Useful if you would like the total sensor to match what you see on your meter you are trying to match.
     - service: set_total
       variables:
         new_total: float
       then:
         - globals.set:
             id: half_rotations_total
-            value: !lambda 'return new_total / (${gallons_per_half_rotation});'
+            value: !lambda 'return new_total / (${volume_per_half_rotation});'
 
 ota:
   password: !secret ota_password
@@ -94,7 +100,7 @@ globals:
 i2c:
   sda: SDA # GPIO4 D2
   scl: SCL # GPIO5 D1
-  frequency: 100kHz # qmc5883l supports 100kHz and 400kHz. Fastest output data rate is 200Hz so low-speed is fine.
+  frequency: 50kHz
 
 sensor:
   # https://esphome.io/components/sensor/qmc5883l.html
@@ -103,15 +109,24 @@ sensor:
     field_strength_x:
       id: qmc5883l_axis_x
       name: Magnetic Field Strength X
-      internal: ${qmc5883l_raw_disable}
+      disabled_by_default: true
     field_strength_y:
       id: qmc5883l_axis_y
       name: Magnetic Field Strength Y
-      internal: ${qmc5883l_raw_disable}
+      disabled_by_default: true
     field_strength_z:
       id: qmc5883l_axis_z
       name: Magnetic Field Strength Z
-      internal: ${qmc5883l_raw_disable}
+      disabled_by_default: true
+    # Uncomment if your ESPHome release includes https://github.com/esphome/esphome/pull/6456
+    # temperature:
+    #   id: qmc5883l_temperature
+    #   name: Temperature
+    #   filters:
+    #     - offset: 34.0
+    #     - or:
+    #       - throttle: 60s
+    #       - delta: 0.5
     oversampling: ${qmc5883l_oversampling}
     update_interval: ${qmc5883l_update_interval}
 
@@ -126,23 +141,23 @@ sensor:
 
   - platform: template
     name: Total
-    lambda: return id(half_rotations_total) * (${gallons_per_half_rotation});
+    lambda: return id(half_rotations_total) * (${volume_per_half_rotation});
     update_interval: 10s
     accuracy_decimals: 2
     device_class: water
     state_class: total_increasing
-    unit_of_measurement: gal
+    unit_of_measurement: ${volume_unit}
 
   - platform: template
     name: Flow
     lambda: |-
-      float flow = id(half_rotations_flow) * 6 * (${gallons_per_half_rotation});
+      float flow = id(half_rotations_flow) * 6 * (${volume_per_half_rotation});
       id(half_rotations_flow) = 0;
       return flow;
     update_interval: 10s
     accuracy_decimals: 2
     state_class: measurement
-    unit_of_measurement: gal/min
+    unit_of_measurement: ${volume_unit}/min
 
   - platform: wifi_signal
     name: WiFi Signal
