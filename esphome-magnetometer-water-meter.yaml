@@ -1,3 +1,4 @@
+---
 # This config uses ESP8266 and QMC5883L, a triple-axis magnetometer, to read the rotating magnet inside your water meter.
 
 # This should be compatible will all the water meters the Flume water sensor is compatible with,
@@ -14,35 +15,11 @@
 # converted to any engineering unit of measure for totalization, indication or process control."
 
 substitutions:
-  # One of: CCF, ft³, gal, L, m³
+  # water or gas
+  device_class: 'water'
+  # For water one of: CCF, ft³, gal, L, m³
+  # For gas one of: CCF, ft³, m³
   volume_unit: 'gal'
-
-  # To calibrate:
-  # 1. Temporarily enable the Magnetic Field Strength X, Y, and Z sensors in HA.
-  # 2. Run a light stream of water.
-  # 3. Observe which axis changes the most and its range.
-  # 4. Set the axis and thresholds below. e.g. if y axis ranges from -121 to -69 use -100 to -90 as thresholds.
-  # 5. Disable the Magnetic Field Strength X, Y, and Z sensors in HA. Otherwise HA recorder will get overwhelmed.
-  # TODO: automate this calibration with a switch in the UI
-  qmc5883l_axis: 'y'
-  threshold_upper: '-90'
-  threshold_lower: '-100'
-
-  # To calibrate:
-  # 1. Temporarily enable the "Half rotations total" sensor in HA.
-  # 2. Write it down and also write down the reading on your water meter.
-  # 3. After a few hours or even days of regular water usage, write down both of them again.
-  # 4. Divide diff of readings in volume_unit with diff of half rotations.
-  # 5. Disable the "Half rotations total" sensor in HA. Otherwise HA recorder will get overwhelmed.
-  # Alternatively you can search for specifications of your specific water meter and its size. e.g.
-  # https://www.riotronics.com/wp-content/uploads/2019/11/NT10-4P-WaterRead-pdf3.01.pdf
-  # Meter size | Pulses/Gallon
-  # 5/8"       | 231.24
-  # 3/4"       | 129.04
-  # volume_per_half_rotation: "2 / 231.24"
-  # If you have the Flume water sensor you can use its lowest reported value. You can find it with:
-  # select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;
-  volume_per_half_rotation: '0.01008156'
 
   # If you need to change update_interval also change oversampling so that they match.
   # http://wiki.sunfounder.cc/images/7/72/QMC5883L-Datasheet-1.0.pdf
@@ -70,7 +47,7 @@ api:
   encryption:
     key: !secret api_encryption_key
   services:
-    # Based on https://esphome.io/components/sensor/pulse_meter.html#re-setting-the-total-pulse-count 
+    # Based on https://esphome.io/components/sensor/pulse_meter.html#re-setting-the-total-pulse-count
     # Useful if you would like the total sensor to match what you see on your meter you are trying to match.
     - service: set_total
       variables:
@@ -78,7 +55,7 @@ api:
       then:
         - globals.set:
             id: half_rotations_total
-            value: !lambda 'return new_total / (${volume_per_half_rotation});'
+            value: !lambda 'return new_total / id(volume_per_half_rotation).state;'
 
 ota:
   password: !secret ota_password
@@ -96,13 +73,211 @@ globals:
     type: long
     restore_value: no
     initial_value: '0'
+  - id: axis_value_high
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: calibrating
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: calibrating_axis_x_min
+    type: float
+    restore_value: no
+  - id: calibrating_axis_x_max
+    type: float
+    restore_value: no
+  - id: calibrating_axis_y_min
+    type: float
+    restore_value: no
+  - id: calibrating_axis_y_max
+    type: float
+    restore_value: no
+  - id: calibrating_axis_z_min
+    type: float
+    restore_value: no
+  - id: calibrating_axis_z_max
+    type: float
+    restore_value: no
+
+number:
+  # This depends on your specific water meter model and its size.
+  # To calibrate:
+  # 1. Temporarily enable the "Half rotations total" sensor in HA.
+  # 2. Write it down and also write down the reading on your water meter.
+  # 3. After a few hours or even days of regular water usage, write down both of them again.
+  # 4. Set this to the result of: diff of readings in volume_unit divided by diff of half rotations.
+  # 5. Disable the "Half rotations total" sensor in HA.
+  # Alternatively you can search for specifications of your specific water meter and its size. e.g.
+  # for Neptune T-10 from https://www.riotronics.com/wp-content/uploads/2019/11/NT10-4P-WaterRead-pdf3.01.pdf
+  # Meter size | Pulses/Gallon
+  # 5/8"       | 231.24
+  # 3/4"       | 129.04
+  # 1"         | 60.32
+  # 1 1/2"     | 27.03
+  # 2"         | 14.92
+  # So for a 5/8" Neptune T-10 you will set this to 0.00864902 (2 / 231.24)
+  # If you have the Flume water sensor you can use its lowest reported value. You can find it with:
+  # select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;
+  # Defaulting to 0.01008156 which is for a 3/4" Badge Meter Model 35.
+  - platform: template
+    id: volume_per_half_rotation
+    name: Volume per half rotation
+    entity_category: config
+    icon: 'mdi:counter'
+    mode: box
+    min_value: 0
+    max_value: 9999999
+    step: 0.000000001
+    initial_value: 0.01008156
+    restore_value: true
+    optimistic: true
+
+  # To calibrate these just press the "Calibrate axis" button. Alternatively:
+  # 1. Temporarily enable the Magnetic Field Strength X, Y, and Z sensors in HA.
+  # 2. Run a light stream of water.
+  # 3. Observe which axis changes the most and its range.
+  # 4. Set the axis and thresholds below. e.g. if y axis ranges from -121 to -69 use -100 to -90 as thresholds.
+  # 5. Disable the Magnetic Field Strength X, Y, and Z sensors in HA. Otherwise HA recorder will get overwhelmed.
+  - platform: template
+    id: threshold_lower
+    name: Threshold lower
+    entity_category: config
+    icon: 'mdi:counter'
+    mode: box
+    min_value: -9999
+    max_value: 9999
+    step: 1
+    initial_value: -100
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    id: threshold_upper
+    name: Threshold upper
+    entity_category: config
+    icon: 'mdi:counter'
+    mode: box
+    min_value: -9999
+    max_value: 9999
+    step: 1
+    initial_value: -90
+    restore_value: true
+    optimistic: true
+
+select:
+  - platform: template
+    id: axis
+    name: "Axis"
+    options:
+      - x
+      - y
+      - z
+    initial_option: y
+    restore_value: true
+    optimistic: true
+
+button:
+  - platform: template
+    name: "Calibrate axis"
+    on_press:
+      - logger.log: Calibrate axis button pressed. Make sure a light stream of water is running for the next 5 seconds.
+      - lambda: |-
+          id(calibrating) = true;
+          id(calibrating_axis_x_min) = std::numeric_limits<float>::max();
+          id(calibrating_axis_x_max) = std::numeric_limits<float>::min();
+          id(calibrating_axis_y_min) = std::numeric_limits<float>::max();
+          id(calibrating_axis_y_max) = std::numeric_limits<float>::min();
+          id(calibrating_axis_z_min) = std::numeric_limits<float>::max();
+          id(calibrating_axis_z_max) = std::numeric_limits<float>::min();
+      - delay: 5s
+      - lambda: |-
+          id(calibrating) = false;
+          float x_range = id(calibrating_axis_x_max) - id(calibrating_axis_x_min);
+          float y_range = id(calibrating_axis_y_max) - id(calibrating_axis_y_min);
+          float z_range = id(calibrating_axis_z_max) - id(calibrating_axis_z_min);
+          if (x_range < 0) {
+            ESP_LOGW("calibration", "Didn't get any values for x");
+          } else {
+            ESP_LOGI("calibration", "x ranged from %f to %f",
+                     id(calibrating_axis_x_min), id(calibrating_axis_x_max));
+          }
+          if (y_range < 0) {
+            ESP_LOGW("calibration", "Didn't get any values for y");
+          } else {
+            ESP_LOGI("calibration", "y ranged from %f to %f",
+                     id(calibrating_axis_y_min), id(calibrating_axis_y_max));
+          }
+          if (z_range < 0) {
+            ESP_LOGW("calibration", "Didn't get any values for z");
+          } else {
+            ESP_LOGI("calibration", "z ranged from %f to %f",
+                     id(calibrating_axis_z_min), id(calibrating_axis_z_max));
+          }
+          std::string axis_with_largest_range;
+          float min, max;
+          if (x_range > 0 && x_range > y_range && x_range > z_range) {
+            axis_with_largest_range = "x";
+            min = id(calibrating_axis_x_min);
+            max = id(calibrating_axis_x_max);
+          } else if (y_range > 0 && y_range > x_range && y_range > z_range) {
+            axis_with_largest_range = "y";
+            min = id(calibrating_axis_y_min);
+            max = id(calibrating_axis_y_max);
+          } else if (z_range > 0 && z_range > x_range && z_range > y_range) {
+            axis_with_largest_range = "z";
+            min = id(calibrating_axis_z_min);
+            max = id(calibrating_axis_z_max);
+          } else {
+            ESP_LOGE("calibration", "Calibration failed");
+            return;
+          }
+          float threshold_offset = 0.25 * (max - min);
+          float lower_threshold = min + threshold_offset;
+          float upper_threshold = max - threshold_offset;
+          ESP_LOGI("calibration", "Selected %s axis with lower threshold: %f and upper threshold: %f",
+                   axis_with_largest_range, lower_threshold, upper_threshold);
+          id(axis).publish_state(axis_with_largest_range);
+          id(threshold_lower).publish_state(lower_threshold);
+          id(threshold_upper).publish_state(upper_threshold);
+
+interval:
+  - interval: ${qmc5883l_update_interval}
+    then:
+      - lambda: |-
+          if (id(calibrating)) {
+            id(calibrating_axis_x_min) = min(id(calibrating_axis_x_min), id(qmc5883l_axis_x).state);
+            id(calibrating_axis_x_max) = max(id(calibrating_axis_x_max), id(qmc5883l_axis_x).state);
+            id(calibrating_axis_y_min) = min(id(calibrating_axis_y_min), id(qmc5883l_axis_y).state);
+            id(calibrating_axis_y_max) = max(id(calibrating_axis_y_max), id(qmc5883l_axis_y).state);
+            id(calibrating_axis_z_min) = min(id(calibrating_axis_z_min), id(qmc5883l_axis_z).state);
+            id(calibrating_axis_z_max) = max(id(calibrating_axis_z_max), id(qmc5883l_axis_z).state);
+          }
 
 i2c:
-  sda: SDA # GPIO4 D2
-  scl: SCL # GPIO5 D1
+  sda: SDA  # GPIO4 D2
+  scl: SCL  # GPIO5 D1
   frequency: 50kHz
 
 sensor:
+  # Holds the magnetic field strength value of x, y, or z depending on the axis template select.
+  # Increments counters when value crosses thresholds.
+  - platform: template
+    id: axis_value
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            if (x > id(threshold_upper).state && !id(axis_value_high)) {
+              id(axis_value_high) = true;
+              id(half_rotations_total) += 1;
+              id(half_rotations_flow) += 1;
+              id(led).turn_on();
+            } else if (x < id(threshold_lower).state && id(axis_value_high)) {
+              id(axis_value_high) = false;
+              id(led).turn_off();
+            }
+
   # https://esphome.io/components/sensor/qmc5883l.html
   - platform: qmc5883l
     address: 0x0D
@@ -110,14 +285,29 @@ sensor:
       id: qmc5883l_axis_x
       name: Magnetic Field Strength X
       disabled_by_default: true
+      on_value:
+        then:
+          - lambda: |-
+              if (id(axis).state != "x") return;
+              id(axis_value).publish_state(x);
     field_strength_y:
       id: qmc5883l_axis_y
       name: Magnetic Field Strength Y
       disabled_by_default: true
+      on_value:
+        then:
+          - lambda: |-
+              if (id(axis).state != "y") return;
+              id(axis_value).publish_state(x);
     field_strength_z:
       id: qmc5883l_axis_z
       name: Magnetic Field Strength Z
       disabled_by_default: true
+      on_value:
+        then:
+          - lambda: |-
+              if (id(axis).state != "z") return;
+              id(axis_value).publish_state(x);
     # Uncomment if your ESPHome release includes https://github.com/esphome/esphome/pull/6456
     # temperature:
     #   id: qmc5883l_temperature
@@ -141,17 +331,17 @@ sensor:
 
   - platform: template
     name: Total
-    lambda: return id(half_rotations_total) * (${volume_per_half_rotation});
+    lambda: return id(half_rotations_total) * id(volume_per_half_rotation).state;
     update_interval: 10s
     accuracy_decimals: 2
-    device_class: water
+    device_class: ${device_class}
     state_class: total_increasing
     unit_of_measurement: ${volume_unit}
 
   - platform: template
     name: Flow
     lambda: |-
-      float flow = id(half_rotations_flow) * 6 * (${volume_per_half_rotation});
+      float flow = id(half_rotations_flow) * 6 * id(volume_per_half_rotation).state;
       id(half_rotations_flow) = 0;
       return flow;
     update_interval: 10s
@@ -167,24 +357,6 @@ sensor:
       - sliding_window_moving_average:
           window_size: 6
           send_every: 6
-
-binary_sensor:
-  - platform: analog_threshold
-    id: magnet_analog_threshold
-    internal: true
-    sensor_id: qmc5883l_axis_${qmc5883l_axis}
-    threshold:
-      upper: ${threshold_upper}
-      lower: ${threshold_lower}
-    on_press:
-      then:
-        - lambda: |-
-            id(half_rotations_total) += 1;
-            id(half_rotations_flow) += 1;
-        - switch.turn_on: led
-    on_release:
-      then:
-        - switch.turn_off: led
 
 switch:
   # LED flashes faster/slower as magnet rotates on water meter
