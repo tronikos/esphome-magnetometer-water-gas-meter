@@ -169,6 +169,7 @@ select:
   - platform: template
     id: axis
     name: "Axis"
+    entity_category: config
     options:
       - x
       - y
@@ -180,16 +181,17 @@ select:
 button:
   - platform: template
     name: "Calibrate axis"
+    entity_category: config
     on_press:
-      - logger.log: Calibrate axis button pressed. Make sure a light stream of water is running for the next 5 seconds.
       - lambda: |-
-          id(calibrating) = true;
+          ESP_LOGI("calibration", "Starting calibration. Make sure a light stream of water is running for the next 5 seconds");
           id(calibrating_axis_x_min) = std::numeric_limits<float>::max();
           id(calibrating_axis_x_max) = std::numeric_limits<float>::min();
           id(calibrating_axis_y_min) = std::numeric_limits<float>::max();
           id(calibrating_axis_y_max) = std::numeric_limits<float>::min();
           id(calibrating_axis_z_min) = std::numeric_limits<float>::max();
           id(calibrating_axis_z_max) = std::numeric_limits<float>::min();
+          id(calibrating) = true;
       - delay: 5s
       - lambda: |-
           id(calibrating) = false;
@@ -236,7 +238,7 @@ button:
           float lower_threshold = min + threshold_offset;
           float upper_threshold = max - threshold_offset;
           ESP_LOGI("calibration", "Selected %s axis with lower threshold: %f and upper threshold: %f",
-                   axis_with_largest_range, lower_threshold, upper_threshold);
+                   axis_with_largest_range.c_str(), lower_threshold, upper_threshold);
           id(axis).publish_state(axis_with_largest_range);
           id(threshold_lower).publish_state(lower_threshold);
           id(threshold_upper).publish_state(upper_threshold);
@@ -285,6 +287,7 @@ sensor:
       id: qmc5883l_axis_x
       name: Magnetic Field Strength X
       disabled_by_default: true
+      entity_category: diagnostic
       on_value:
         then:
           - lambda: |-
@@ -294,6 +297,7 @@ sensor:
       id: qmc5883l_axis_y
       name: Magnetic Field Strength Y
       disabled_by_default: true
+      entity_category: diagnostic
       on_value:
         then:
           - lambda: |-
@@ -303,6 +307,7 @@ sensor:
       id: qmc5883l_axis_z
       name: Magnetic Field Strength Z
       disabled_by_default: true
+      entity_category: diagnostic
       on_value:
         then:
           - lambda: |-
