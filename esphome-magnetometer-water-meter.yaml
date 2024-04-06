@@ -151,6 +151,7 @@ number:
     initial_value: 0.01008156
     restore_value: true
     optimistic: true
+    unit_of_measurement: ${volume_unit}
 
   # To calibrate these just press the "Calibrate axis" button. Alternatively:
   # 1. Temporarily enable the Magnetic Field Strength X, Y, and Z sensors in HA.
@@ -172,6 +173,7 @@ number:
     initial_value: -9999
     restore_value: true
     optimistic: true
+    unit_of_measurement: µT
 
   - platform: template
     id: threshold_upper
@@ -184,11 +186,11 @@ number:
     initial_value: 9999
     restore_value: true
     optimistic: true
+    unit_of_measurement: µT
 
   - platform: template
     id: calibration_seconds
     name: Calibration time
-    unit_of_measurement: s
     entity_category: config
     icon: mdi:timer
     mode: box
@@ -198,6 +200,7 @@ number:
     initial_value: 5
     restore_value: true
     optimistic: true
+    unit_of_measurement: s
 
 select:
   - platform: template
@@ -363,6 +366,7 @@ sensor:
     entity_category: diagnostic
     accuracy_decimals: 0
     state_class: 'total_increasing'
+    icon: 'mdi:counter'
 
   - platform: template
     id: sensor_total
