@@ -61,7 +61,8 @@ preferences:
   flash_write_interval: 60min
 
 logger:
-  level: INFO
+  logs:
+    qmc5883l: INFO
 
 api:
   encryption:
