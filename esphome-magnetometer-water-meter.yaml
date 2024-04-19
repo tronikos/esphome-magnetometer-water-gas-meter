@@ -392,15 +392,6 @@ sensor:
     state_class: measurement
     unit_of_measurement: ${volume_unit}/min
 
-  - platform: wifi_signal
-    name: WiFi Signal
-    update_interval: 60s
-    entity_category: diagnostic
-    filters:
-      - sliding_window_moving_average:
-          window_size: 6
-          send_every: 6
-
 switch:
   # LED flashes faster/slower as magnet rotates on water meter
   - platform: gpio
