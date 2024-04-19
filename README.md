@@ -21,6 +21,8 @@ preferences:
   flash_write_interval: 60min
 ```
 
+<img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/1b857c5f-06f4-4a0e-8f37-64314acf0dd9" alt="Water meter in Home Assistant" width=40%>
+
 ## Compatibility
 
 ### Water meter
@@ -28,6 +30,8 @@ preferences:
 The magnetometer is used to read the rotating magnet inside your water meter.
 
 This should be compatible will all the water meters the Flume water sensor is compatible with, which is [compatible](https://help.flumewater.com/en/articles/1618594-is-the-flume-device-compatible-with-all-water-meters) with about 95% of water meters in the United States.
+
+To verify compatibility follow [this](https://help.flumewater.com/en/articles/1618594-is-the-flume-device-compatible-with-all-water-meters). Alternatively, install the Sensors app on your phone, place your phone next to the meter, and see if the Geomagnetic Field sensors are changing while water is running.
 
 [Video](https://www.youtube.com/watch?v=M9nVkSZ6_H4) showing the internals of a water meter.
 
@@ -44,6 +48,8 @@ converted to any engineering unit of measure for totalization, indication or pro
 The magnetometer is used to read the diaphragm that expands and contracts inside your gas meter.
 
 This should be compatible with all diaphragm/bellows meters which are the most common type of gas meter, seen in almost all residential and small commercial installations.
+
+To verify compatibility install the Sensors app on your phone, place your phone next to the meter, and see if the Geomagnetic Field sensors are changing while gas is running.
 
 [Video](https://www.youtube.com/watch?v=WKlVmXe46w8) showing the internals of a gas meter.
 
@@ -77,7 +83,10 @@ GND | GND
 SCL | D1
 SDA | D2
 
-The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for the 4 above pins. Tie the 4 white wires together with the GND solid wire. You might need to use a header pin for the GND.
+The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for the 4 above pins. Tie the 4 white wires together with the GND solid wire. You might need to use a header pin for the GND. If you use a header pin cut the 5 GND wires shorter to avoid the ball of wires I had...
+
+![magnetometer](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/c7052171-eee1-44cb-90f4-76cad4e46334)
+![magnetometer in adhesive heat shrink tubing](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/0ca8c738-63c2-4d38-ae35-42bb219b88d1)
 
 ## Software installation
 

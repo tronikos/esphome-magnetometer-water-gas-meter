@@ -3,3 +3,5 @@
 default: true
 
 MD013: false  # Disable line-length checking
+MD033:
+  allowed_elements: [img]  # Allow embedded image tags as there is no way to resize images in native markdown
