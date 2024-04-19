@@ -1,0 +1,19 @@
+---
+substitutions:
+  # For gas one of: CCF, ft³, m³
+  volume_unit: 'ft³'
+
+packages:
+  gas_meter: !include
+    file: esphome-magnetometer.yaml
+    vars:
+      device_class: 'gas'
+      device_icon: 'mdi:meter-gas'
+
+switch:
+  # LED flashes faster/slower as magnet rotates on water meter
+  - platform: gpio
+    id: led
+    pin:
+      number: GPIO2
+      inverted: true
