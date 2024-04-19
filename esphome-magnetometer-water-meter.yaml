@@ -52,6 +52,7 @@ substitutions:
 esphome:
   name: ${device_class}-meter
   friendly_name: ${device_class} meter
+  min_version: "2024.4.0" # This version includes https://github.com/esphome/esphome/pull/6456
 
 esp8266:
   board: d1_mini
@@ -153,6 +154,21 @@ number:
     restore_value: true
     optimistic: true
     unit_of_measurement: ${volume_unit}
+
+  - platform: template
+    name: "Temperature Offset"
+    id: temperature_offset
+    unit_of_measurement: "°C"
+    min_value: -100
+    max_value: 100
+    step: 0.1
+    mode: box
+    update_interval: never
+    optimistic: true
+    restore_value: true
+    initial_value: 32.6
+    icon: "mdi:thermometer"
+    entity_category: config
 
   # To calibrate these just press the "Calibrate axis" button. Alternatively:
   # 1. Temporarily enable the Magnetic Field Strength X, Y, and Z sensors in HA.
@@ -352,15 +368,17 @@ sensor:
           - lambda: if (id(axis).state == "z") id(axis_value).publish_state(x);
       filters:
         - delta: 3
-    # Uncomment if your ESPHome release includes https://github.com/esphome/esphome/pull/6456
-    # temperature:
-    #   id: qmc5883l_temperature
-    #   name: Temperature
-    #   filters:
-    #     - offset: 34.0
-    #     - or:
-    #       - throttle: 60s
-    #       - delta: 0.5
+    temperature:
+      id: qmc5883l_temperature
+      name: Temperature
+      filters:
+        - lambda: "return x + id(temperature_offset).state;"
+        - sliding_window_moving_average:
+            window_size: 20
+            send_every: 20
+        - or:
+          - throttle: 60s
+          - delta: 0.5
     oversampling: ${qmc5883l_oversampling}
     update_interval: ${qmc5883l_update_interval}
 
