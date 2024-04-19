@@ -1,0 +1,27 @@
+---
+esphome:
+  name: water-meter
+  friendly_name: Water meter
+
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
+
+preferences:
+  flash_write_interval: 60min
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+packages:
+  # water_meter: !include
+  #   file: esphome-water-meter.yaml
+  water_meter: github://tronikos/esphome-magnetometer-water-gas-meter/esphome-water-meter.yaml@main
