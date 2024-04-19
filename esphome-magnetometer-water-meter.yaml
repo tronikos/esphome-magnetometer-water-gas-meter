@@ -306,7 +306,7 @@ sensor:
   - platform: template
     id: axis_value
     internal: true
-    on_value:
+    on_raw_value:
       then:
         - lambda: |-
             if (x > id(threshold_upper).state && !id(axis_value_high)) {
@@ -327,25 +327,31 @@ sensor:
       name: Magnetic Field Strength X
       disabled_by_default: true
       entity_category: diagnostic
-      on_value:
+      on_raw_value:
         then:
           - lambda: if (id(axis).state == "x") id(axis_value).publish_state(x);
+      filters:
+        - delta: 3
     field_strength_y:
       id: qmc5883l_axis_y
       name: Magnetic Field Strength Y
       disabled_by_default: true
       entity_category: diagnostic
-      on_value:
+      on_raw_value:
         then:
           - lambda: if (id(axis).state == "y") id(axis_value).publish_state(x);
+      filters:
+        - delta: 3
     field_strength_z:
       id: qmc5883l_axis_z
       name: Magnetic Field Strength Z
       disabled_by_default: true
       entity_category: diagnostic
-      on_value:
+      on_raw_value:
         then:
           - lambda: if (id(axis).state == "z") id(axis_value).publish_state(x);
+      filters:
+        - delta: 3
     # Uncomment if your ESPHome release includes https://github.com/esphome/esphome/pull/6456
     # temperature:
     #   id: qmc5883l_temperature
@@ -368,6 +374,8 @@ sensor:
     accuracy_decimals: 0
     state_class: 'total_increasing'
     icon: 'mdi:counter'
+    filters:
+      - delta: 1
 
   - platform: template
     id: sensor_total
@@ -379,6 +387,10 @@ sensor:
     icon: ${device_icon}
     state_class: total_increasing
     unit_of_measurement: ${volume_unit}
+    filters:
+      - or:
+        - throttle: 60s
+        - delta: 0.01
 
   - platform: template
     id: sensor_flow
@@ -391,6 +403,10 @@ sensor:
     accuracy_decimals: 2
     state_class: measurement
     unit_of_measurement: ${volume_unit}/min
+    filters:
+      - or:
+        - throttle: 60s
+        - delta: 0.01
 
 switch:
   # LED flashes faster/slower as magnet rotates on water meter
