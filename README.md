@@ -177,9 +177,29 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
 
 ## Calibration
 
+### Magnetic field axis and thresholds
+
+To calibrate these just run a light stream of water/gas and press the "Calibrate axis" button. After 5 seconds (configurable) the proper axis and thresholds should be set.
+
+Alternatively:
+
+1. Temporarily enable the Magnetic Field Strength X, Y, and Z sensors in HA.
+2. Run a light stream of water/gas.
+3. Observe which axis changes the most and its range.
+4. Set the axis and thresholds. e.g. if y axis ranges from min to max use:
+
+    ```raw
+    Axis = y
+    Threshold lower = min + 0.25 * (max - min)
+    Threshold upper = max - 0.25 * (max - min)
+    ```
+
+5. Disable the Magnetic Field Strength X, Y, and Z sensors in HA. Otherwise HA recorder will get overwhelmed.
+
 ### Volume per half rotation
 
 This depends on your specific water/gas meter model and its size.
+
 To calibrate:
 
 1. Temporarily enable the "Half rotations total" sensor in HA.
@@ -204,26 +224,7 @@ So for a 5/8" Neptune T-10 you will set this to `0.00864902` (2 / 231.24)
 If you have the Flume water sensor you can use its lowest reported value. You can find it with:
 `select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;`
 
-Defaulting to `0.01008156` which is for a 3/4" Badge Meter Model 35.
-
-### Magnetic field axis and thresholds
-
-To calibrate these just run a light stream of water/gas and press the "Calibrate axis" button. Within 5 seconds the proper axis and thresholds should be set.
-
-Alternatively:
-
-1. Temporarily enable the Magnetic Field Strength X, Y, and Z sensors in HA.
-2. Run a light stream of water/gas.
-3. Observe which axis changes the most and its range.
-4. Set the axis and thresholds. e.g. if y axis ranges from min to max use:
-
-    ```raw
-    Axis = y
-    Threshold lower = min + 0.25 * (max - min)
-    Threshold upper = max - 0.25 * (max - min)
-    ```
-
-5. Disable the Magnetic Field Strength X, Y, and Z sensors in HA. Otherwise HA recorder will get overwhelmed.
+This defaults to `0.01008156` which is for a 3/4" Badge Meter Model 35.
 
 ### Temperature
 
