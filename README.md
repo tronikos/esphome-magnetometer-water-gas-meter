@@ -228,3 +228,166 @@ Alternatively:
 ### Temperature
 
 Place another temperature sensor next to the QMC5883L and adjust the temperature offset so that they match.
+
+## Home Assistant alerts
+
+I'm using the [Alert integration](https://www.home-assistant.io/integrations/alert/) to get alerted if there is a leak.
+
+In `/homeassistant/configuration.yaml` I have:
+
+```yaml
+alert: !include alerts.yaml
+
+template:
+  - sensor:
+    - name: Water running for 45 minutes
+      unique_id: water_running_45min
+      device_class: "moisture"
+      icon: mdi:waves
+      delay_on:
+        minutes: 45
+      # Water has been running for 45 minutes. Subtract irrigation system that consumes 0.28 gal/min between 7 to 9 am or 8 to 10 am depending on DST
+      state: "{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) > 0 }}"
+    - name: Water running for 20 minutes at more than 1.5 gal/min
+      unique_id: water_running_20min
+      device_class: "moisture"
+      icon: mdi:waves
+      delay_on:
+        minutes: 20
+      state: "{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) > 1.5 }}"
+
+notify:
+  - platform: group
+    name: nikos
+    services:
+      - service: persistent_notification
+      - service: mobile_app_pixel_7a
+      - service: mobile_app_le2125
+  - platform: group
+    name: nikos_mobile
+    services:
+      - service: mobile_app_pixel_7a
+      - service: mobile_app_le2125
+  - platform: group
+    name: wife
+    services:
+      - service: mobile_app_wife_iphone
+  - platform: group
+    name: all
+    services:
+      - service: nikos
+      - service: wife
+      - service: google_assistant_sdk
+      - service: alexa_media_garage_ecobee_switch
+```
+
+In `Settings > Devices & services > Helpers` I have created a group `binary_sensor.water_leak_sensors_group` with the above 2 sensors together with all my water leak sensors.
+
+In `Settings > Automations` I have created the following automation to get notified if I ever forget to add a new sensor to the group:
+
+```yaml
+alias: "Notify: incomplete groups"
+description: ""
+trigger:
+  - platform: time
+    at: "10:01:00"
+action:
+  - if:
+      - condition: template
+        value_template: "{{ missing_moisture_sensors != '' }}"
+    then:
+      - service: notify.nikos
+        data:
+          message: |-
+            binary_sensor.water_leak_sensors_group is missing:
+            {{missing_moisture_sensors}}
+variables:
+  missing_moisture_sensors: |
+    {{ states.binary_sensor
+        | rejectattr('attributes.device_class', 'undefined')
+        | selectattr('attributes.device_class', '==', 'moisture')
+        | rejectattr('attributes.entity_id', 'defined')
+        | map(attribute='entity_id')
+        | reject('in', states.binary_sensor.water_leak_sensors_group.attributes.entity_id)
+        | join('\n') }}
+mode: single
+```
+
+In `/homeassistant/alerts.yaml` I have:
+
+```yaml
+water_leak:
+  name: Water leak detected
+  message: "Water leak detected at {{ expand('binary_sensor.water_leak_sensors_group') | selectattr('state', '==', 'on') | map(attribute='attributes.friendly_name') | join(', ') | lower() | replace(': water leak sensor', '') }} {{ relative_time(states.binary_sensor.water_leak_sensors_group.last_changed) }} ago"
+  done_message: Water leak not detected anymore
+  entity_id: binary_sensor.water_leak_sensors_group
+  state: "on"
+  repeat: 5
+  can_acknowledge: true
+  skip_first: false
+  notifiers:
+    - all
+  data:
+    push:
+      sound:
+        name: "default"
+        critical: 1
+        volume: 1.0
+    ttl: 0
+    priority: high
+    media_stream: alarm_stream_max
+water_leak_tts:
+  name: Water leak detected (TTS)
+  message: TTS
+  done_message: Water leak not detected anymore
+  entity_id: binary_sensor.water_leak_sensors_group
+  state: "on"
+  repeat: 5
+  can_acknowledge: true
+  skip_first: false
+  notifiers:
+    - nikos_mobile
+  data:
+    ttl: 0
+    priority: high
+    media_stream: alarm_stream_max
+    tts_text: "Water leak detected"
+```
+
+In my main dashboard I have the following typically hidden [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) cards:
+
+```yaml
+type: custom:auto-entities
+show_empty: false
+card:
+  title: Active Alerts
+  type: entities
+  state_color: true
+filter:
+  include:
+    - domain: alert
+      not:
+        state: idle
+sort:
+  method: friendly_name
+```
+
+```yaml
+type: custom:auto-entities
+show_empty: false
+card:
+  title: Active alert sensors
+  type: entities
+  state_color: true
+filter:
+  include:
+    - attributes:
+        device_class: moisture
+      state: 'on'
+    - attributes:
+        device_class: smoke
+      state: 'on'
+    - attributes:
+        device_class: carbon_monoxide
+      state: 'on'
+```
