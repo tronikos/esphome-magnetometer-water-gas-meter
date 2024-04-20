@@ -21,7 +21,7 @@ preferences:
   flash_write_interval: 60min
 ```
 
-<img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/1b857c5f-06f4-4a0e-8f37-64314acf0dd9" alt="Water meter in Home Assistant" width=40%>
+<img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/2deb6430-138a-477b-a303-7e29e53ab475" alt="Water meter in Home Assistant" width=40%>
 
 ## Compatibility
 
