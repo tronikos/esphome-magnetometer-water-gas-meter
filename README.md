@@ -71,14 +71,14 @@ To verify compatibility install the Sensors app on your phone, place your phone 
   - I placed mine in the water meter box 20ft away from the garage
 - Ethernet cable
   - I used 32.8ft or 10m direct burial CAT6.
-  - CAT6 is preferred because of its lower capacitance. CAT5 50ft or 15m [should work](https://www.youtube.com/watch?v=6v1KZBRZRCI). For 100m you will need an active terminator such as [LTC4311](https://www.youtube.com/watch?v=nhWPxO7jx_o).
+  - CAT6 is preferred because of its lower capacitance. CAT5 50ft or 15m [should work](https://www.youtube.com/watch?v=6v1KZBRZRCI). For 100ft you will need an active terminator such as [LTC4311](https://www.youtube.com/watch?v=nhWPxO7jx_o).
 - Some way to weather proof the QMC5883L. Some options:
-  - Adhesive 4:1 heat shrink tubing
+  - Adhesive 4:1 heat shrink tubing (this is what I used)
   - Silicone sealant
   - Nail polish
   - Hot glue
 - Some way to mount the QMC5883L on the meter. Some options:
-  - Cable zip tie
+  - Cable zip tie (this is what I used)
   - Duct tape
 - Conduit for the ethernet cable. Can be skipped if using direct burial ethernet cable.
 
@@ -258,7 +258,7 @@ template:
       icon: mdi:waves
       delay_on:
         minutes: 45
-      # Water has been running for 45 minutes. Subtract irrigation system that consumes 0.28 gal/min between 7 to 9 am or 8 to 10 am depending on DST
+      # Subtract irrigation system that consumes 0.28 gal/min between 7 to 9 am or 8 to 10 am depending on DST
       state: "{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) > 0 }}"
     - name: Water running for 20 minutes at more than 1.5 gal/min
       unique_id: water_running_20min
@@ -366,7 +366,7 @@ water_leak_tts:
     tts_text: "Water leak detected"
 ```
 
-In my main dashboard I have the following typically hidden [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) cards:
+In my main dashboard I have the following [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) cards, which are typically hidden when empty:
 
 ```yaml
 type: custom:auto-entities
