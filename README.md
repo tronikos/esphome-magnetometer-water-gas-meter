@@ -21,7 +21,7 @@ preferences:
   flash_write_interval: 60min
 ```
 
-<img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/2deb6430-138a-477b-a303-7e29e53ab475" alt="Water meter in Home Assistant" width=40%>
+<img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/4ea7b508-6091-44fa-ab5e-26199f13a7e5" alt="Water meter in Home Assistant" width=40%>
 
 ## Compatibility
 
@@ -43,6 +43,10 @@ As the disc nutates, the center spindle rotates a magnet. The movement of the ma
 by a follower magnet or by various sensors. Each revolution of the magnet is equivalent to a fixed volume of fluid, which is
 converted to any engineering unit of measure for totalization, indication or process control."
 
+#### Magnetometer position for water meter
+
+<img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/130f871c-dfd5-45e2-9837-b23bf8f545e7" alt="water meter sensor position" width=40%>
+
 ### Gas meter
 
 The magnetometer is used to read the diaphragm that expands and contracts inside your gas meter.
@@ -53,6 +57,10 @@ To verify compatibility install the Sensors app on your phone, place your phone 
 
 [Video](https://www.youtube.com/watch?v=WKlVmXe46w8) showing the internals of a gas meter.
 
+#### Magnetometer position for gas meter
+
+<img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/9d5a469f-6b92-442e-b2ec-e0e2b57eead3" alt="gas meter sensor position" width=40%>
+
 ## Hardware installation
 
 ### Parts
@@ -60,10 +68,10 @@ To verify compatibility install the Sensors app on your phone, place your phone 
 - ESP8266 or ESP32 with power adapter
   - I placed mine inside the garage
 - QMC5883L
-  - I placed mine in the water meter box 25ft away from the garage
+  - I placed mine in the water meter box 20ft away from the garage
 - Ethernet cable
   - I used 32.8ft or 10m direct burial CAT6.
-  - CAT6 is preferred because of its lower capacitance. In theory CAT5 50ft or 15m [should work](https://www.youtube.com/watch?v=6v1KZBRZRCI). For 100m you will need an active terminator such as [LTC4311](https://www.youtube.com/watch?v=nhWPxO7jx_o).
+  - CAT6 is preferred because of its lower capacitance. CAT5 50ft or 15m [should work](https://www.youtube.com/watch?v=6v1KZBRZRCI). For 100m you will need an active terminator such as [LTC4311](https://www.youtube.com/watch?v=nhWPxO7jx_o).
 - Some way to weather proof the QMC5883L. Some options:
   - Adhesive 4:1 heat shrink tubing
   - Silicone sealant
@@ -72,7 +80,7 @@ To verify compatibility install the Sensors app on your phone, place your phone 
 - Some way to mount the QMC5883L on the meter. Some options:
   - Cable zip tie
   - Duct tape
-- Conduit for the ethernet cable. Can be skipped if used direct burial ethernet cable.
+- Conduit for the ethernet cable. Can be skipped if using direct burial ethernet cable.
 
 ### Wiring
 
@@ -85,8 +93,11 @@ SDA | D2
 
 The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for the 4 above pins. Tie the 4 white wires together with the GND solid wire. You might need to use a header pin for the GND. If you use a header pin cut the 5 GND wires shorter to avoid the ball of wires I had...
 
-![magnetometer](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/c7052171-eee1-44cb-90f4-76cad4e46334)
+![magnetometer wiring](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/c7052171-eee1-44cb-90f4-76cad4e46334)
 ![magnetometer in adhesive heat shrink tubing](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/0ca8c738-63c2-4d38-ae35-42bb219b88d1)
+![d1 mini wiring](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/b8c3df8d-8111-415b-aecc-64d9c5a290c1)
+![d1 mini lego case](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/6d8d85a0-b00c-4db9-9484-3b345e73f848)
+![driveway](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/69a47f3e-8d8f-4c2e-aec8-14cb729b48a4)
 
 ## Software installation
 
