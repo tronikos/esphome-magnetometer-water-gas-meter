@@ -264,9 +264,12 @@ sensor:
               id(${prefix_id}axis_value_high) = false;
               id(led).turn_off();
             }
+    filters:
+      - delta: 3
 
   # https://esphome.io/components/sensor/qmc5883l.html
   - platform: qmc5883l
+    id: ${prefix_id}qmc5883l_id
     i2c_id: ${prefix_id}i2c_bus
     address: 0x0D
     field_strength_x:
@@ -305,10 +308,10 @@ sensor:
       filters:
         - lambda: "return x + id(${prefix_id}temperature_offset).state;"
         - sliding_window_moving_average:
-            window_size: 20
-            send_every: 20
+            window_size: 3000
+            send_every: 3000
         - or:
-            - throttle: 60s
+            - throttle: 300s
             - delta: 0.5
     oversampling: ${qmc5883l_oversampling}
     update_interval: ${qmc5883l_update_interval}
