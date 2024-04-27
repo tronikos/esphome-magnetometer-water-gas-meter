@@ -325,7 +325,7 @@ variables:
 mode: single
 ```
 
-In `/homeassistant/alerts.yaml` I have:
+In `/homeassistant/alerts.yaml` I have the following to keep alerting me every 5 minutes in case of a leak:
 
 ```yaml
 water_leak:
@@ -402,4 +402,43 @@ filter:
     - attributes:
         device_class: carbon_monoxide
       state: 'on'
+```
+
+In `Settings > Devices & services > Helpers` I have created a Utility Meter `sensor.water_meter_daily_total` to keep track of my daily water usage.
+
+In `Settings > Automations` I have created the following automation to get notified if my daily water usage is abnormal:
+
+```yaml
+alias: "Notify: water usage"
+description: ""
+trigger:
+  - platform: time
+    at: "23:59:00"
+condition: []
+action:
+  - if:
+      - condition: numeric_state
+        entity_id: sensor.water_meter_daily_total
+        above: 100
+    then:
+      - service: notify.nikos
+        metadata: {}
+        data:
+          title: High daily water usage
+          message: >-
+            Consumed {{ states('sensor.water_meter_daily_total') }} gal today.
+            Is there a leak?
+  - if:
+      - condition: numeric_state
+        entity_id: sensor.water_meter_daily_total
+        below: 10
+    then:
+      - service: notify.nikos
+        metadata: {}
+        data:
+          title: Low daily water usage
+          message: >-
+            Consumed {{ states('sensor.water_meter_daily_total') }} gal today.
+            Do you need to reposition or recalibrate the sensor?
+mode: single
 ```
