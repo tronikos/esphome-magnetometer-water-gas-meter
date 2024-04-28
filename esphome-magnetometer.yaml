@@ -24,9 +24,9 @@ substitutions:
 
 esphome:
   min_version: "2024.4.0" # This version includes https://github.com/esphome/esphome/pull/6456
-  // Default loop interval is 16ms but we need shorter for short qmc5883l_update_interval.
-  // With this, the loop time on ESP32 is ~5ms, while on ESP8266 it's ~11ms.
-  // This can be removed once https://github.com/esphome/esphome/pull/6647 is released.
+  # Default loop interval is 16ms but we need shorter for short qmc5883l_update_interval.
+  # With this, the loop time on ESP32 is ~5ms, while on ESP8266 it's ~11ms.
+  # This can be removed once https://github.com/esphome/esphome/pull/6647 is released.
   on_boot:
     then:
       - lambda: App.set_loop_interval(0);
