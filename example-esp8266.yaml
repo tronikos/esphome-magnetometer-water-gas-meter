@@ -24,4 +24,8 @@ wifi:
 packages:
   # water_meter: !include
   #   file: esphome-water-meter.yaml
-  water_meter: github://tronikos/esphome-magnetometer-water-gas-meter/esphome-water-meter.yaml@main
+  water_meter:
+    url: https://github.com/tronikos/esphome-magnetometer-water-gas-meter
+    ref: main
+    file: esphome-water-meter.yaml
+    refresh: 0s

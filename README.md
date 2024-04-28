@@ -11,14 +11,13 @@ substitutions:
   i2c_sda: GPIO4  # D2
 
 packages:
-  water_meter: github://tronikos/esphome-magnetometer-water-gas-meter/esphome-water-meter.yaml@main
-
-esp8266:
-  board: d1_mini
-  restore_from_flash: true
-
-preferences:
-  flash_write_interval: 60min
+  meter:
+    url: https://github.com/tronikos/esphome-magnetometer-water-gas-meter
+    ref: main
+    file: esphome-water-meter.yaml
+    # Or for gas meter:
+    # file: esphome-gas-meter.yaml
+    refresh: 0s
 ```
 
 <img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/4ea7b508-6091-44fa-ab5e-26199f13a7e5" alt="Water meter in Home Assistant" width=40%>
@@ -128,9 +127,13 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
       i2c_sda: GPIO4  # D2
 
     packages:
-      water_meter: github://tronikos/esphome-magnetometer-water-gas-meter/esphome-water-meter.yaml@main
-      # Or for gas meter:
-      # gas_meter: github://tronikos/esphome-magnetometer-water-gas-meter/esphome-gas-meter.yaml@main
+      meter:
+        url: https://github.com/tronikos/esphome-magnetometer-water-gas-meter
+        ref: main
+        file: esphome-water-meter.yaml
+        # Or for gas meter:
+        # file: esphome-gas-meter.yaml
+        refresh: 0s
     ```
 
 7. Change the values in the `substitutions` section based on your setting, e.g. if you have used different pins, or if you prefer a different unit.
@@ -143,7 +146,13 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
       i2c_sda: GPIO4  # D2
 
     packages:
-      water_meter: github://tronikos/esphome-magnetometer-water-gas-meter/esphome-water-meter.yaml@main
+      meter:
+        url: https://github.com/tronikos/esphome-magnetometer-water-gas-meter
+        ref: main
+        file: esphome-water-meter.yaml
+        # Or for gas meter:
+        # file: esphome-gas-meter.yaml
+        refresh: 0s
 
     esphome:
       name: water-meter
