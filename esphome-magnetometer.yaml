@@ -22,12 +22,12 @@ substitutions:
   qmc5883l_update_interval: '5ms'
   qmc5883l_oversampling: '64x'
 
-  volume_per_half_rotation_initial_value: 0.01008156
-  temperature_offset_initial_value: 33
-  threshold_lower_initial_value: -9999
-  threshold_upper_initial_value: 9999
-  calibration_seconds_initial_value: 5
-  axis_initial_option: None
+  volume_per_half_rotation_initial_value: '0.01008156'
+  temperature_offset_initial_value: '33'
+  threshold_lower_initial_value: '-9999'
+  threshold_upper_initial_value: '9999'
+  calibration_seconds_initial_value: '5'
+  axis_initial_option: 'None'
 
 esphome:
   min_version: "2024.4.0" # This version includes https://github.com/esphome/esphome/pull/6456
