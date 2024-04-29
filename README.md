@@ -20,7 +20,7 @@ packages:
     refresh: 0s
 ```
 
-<img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/4ea7b508-6091-44fa-ab5e-26199f13a7e5" alt="Water meter in Home Assistant" width=40%>
+<img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/9363747e-ea4d-457b-b219-90f0192fcf8d" alt="Water meter in Home Assistant" width=40%>
 
 ## Compatibility
 
@@ -245,7 +245,8 @@ So for a 5/8" Neptune T-10 you will set this to `0.00864902` (2 / 231.24)
 If you have the Flume water sensor you can use its lowest reported value. You can find it with:
 `select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;`
 
-This defaults to `0.01008156` which is for a 3/4" Badge Meter Model 35.
+For water meters this defaults to `0.01008156` which is for my 3/4" Badge Meter Model 35.
+For gas meters this defaults to `0.125` which seems to be the most common in US.
 
 ### Temperature
 
