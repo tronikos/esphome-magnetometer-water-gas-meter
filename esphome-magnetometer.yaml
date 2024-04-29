@@ -31,9 +31,9 @@ substitutions:
 
 esphome:
   min_version: "2024.4.0" # This version includes https://github.com/esphome/esphome/pull/6456
-  # Default loop interval is 16ms but we need shorter for short qmc5883l_update_interval.
-  # With this, the loop time on ESP32 is ~5ms, while on ESP8266 it's ~11ms.
-  # This can be removed once https://github.com/esphome/esphome/pull/6647 is released.
+  # Default loop interval is 16ms. Setting it to 0 to make updates faster.
+  # Without setting this, the actual update interval of qmc5883l is: 6ms on ESP32, 10ms on ESP8266.
+  # With this, it's 5ms on ESP32, 8ms on ESP8266.
   on_boot:
     then:
       - lambda: App.set_loop_interval(0);
@@ -100,6 +100,7 @@ number:
     max_value: 9999999
     step: 0.000000001
     initial_value: ${volume_per_half_rotation_initial_value}
+    update_interval: never
     restore_value: true
     optimistic: true
     unit_of_measurement: ${volume_unit}
@@ -126,8 +127,9 @@ number:
     mode: box
     min_value: -9999
     max_value: 9999
-    step: 1
+    step: 0.1
     initial_value: ${threshold_lower_initial_value}
+    update_interval: never
     restore_value: true
     optimistic: true
     unit_of_measurement: µT
@@ -139,8 +141,9 @@ number:
     mode: box
     min_value: -9999
     max_value: 9999
-    step: 1
+    step: 0.1
     initial_value: ${threshold_upper_initial_value}
+    update_interval: never
     restore_value: true
     optimistic: true
     unit_of_measurement: µT
@@ -155,6 +158,7 @@ number:
     max_value: 999
     step: 1
     initial_value: ${calibration_seconds_initial_value}
+    update_interval: never
     restore_value: true
     optimistic: true
     unit_of_measurement: s
@@ -170,6 +174,7 @@ select:
       - z
       - None
     initial_option: ${axis_initial_option}
+    update_interval: never
     restore_value: true
     optimistic: true
 
@@ -236,8 +241,8 @@ button:
           ESP_LOGI("${prefix_id}calibration", "Selected %s axis with lower threshold: %.2f and upper threshold: %.2f",
                    axis_with_largest_range.c_str(), lower_threshold, upper_threshold);
           id(${prefix_id}axis).publish_state(axis_with_largest_range);
-          id(${prefix_id}threshold_lower).publish_state(lower_threshold);
-          id(${prefix_id}threshold_upper).publish_state(upper_threshold);
+          id(${prefix_id}threshold_lower).publish_state(roundf(lower_threshold * 10) / 10);
+          id(${prefix_id}threshold_upper).publish_state(roundf(upper_threshold * 10) / 10);
 
 interval:
   - interval: ${qmc5883l_update_interval}
