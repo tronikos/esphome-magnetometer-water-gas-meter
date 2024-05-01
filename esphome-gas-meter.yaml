@@ -3,6 +3,7 @@ substitutions:
   # For gas one of: CCF, ft³, m³
   volume_unit: 'ft³'
   volume_per_half_rotation_initial_value: '0.125'
+  flow_update_interval_seconds: '30'
 
 packages:
   gas_meter: !include

@@ -28,6 +28,7 @@ substitutions:
   threshold_upper_initial_value: '9999'
   calibration_seconds_initial_value: '5'
   axis_initial_option: 'None'
+  flow_update_interval_seconds: '10'
 
 esphome:
   min_version: "2024.4.0" # This version includes https://github.com/esphome/esphome/pull/6456
@@ -366,10 +367,10 @@ sensor:
     id: ${prefix_id}sensor_flow
     name: ${prefix_name}Flow
     lambda: |-
-      float flow = id(${prefix_id}half_rotations_flow) * 6 * id(${prefix_id}volume_per_half_rotation).state;
+      float flow = id(${prefix_id}half_rotations_flow) * id(${prefix_id}volume_per_half_rotation).state * 60.0 / ${flow_update_interval_seconds};
       id(${prefix_id}half_rotations_flow) = 0;
       return flow;
-    update_interval: 10s
+    update_interval: ${flow_update_interval_seconds}s
     accuracy_decimals: 2
     state_class: measurement
     unit_of_measurement: ${volume_unit}/min

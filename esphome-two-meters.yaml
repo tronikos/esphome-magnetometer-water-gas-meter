@@ -19,6 +19,9 @@ substitutions:
   i2c2_sda: GPIO12
   i2c2_scl: GPIO14
 
+  flow_update_interval_seconds1: '10'
+  flow_update_interval_seconds2: '30'
+
 packages:
   meter1: !include
     file: esphome-magnetometer.yaml
@@ -30,6 +33,7 @@ packages:
       prefix_id: ${prefix1_id}
       i2c_sda: ${i2c1_sda}
       i2c_scl: ${i2c1_scl}
+      flow_update_interval_seconds: ${flow_update_interval_seconds1}
   meter2: !include
     file: esphome-magnetometer.yaml
     vars:
@@ -40,6 +44,7 @@ packages:
       prefix_id: ${prefix2_id}
       i2c_sda: ${i2c2_sda}
       i2c_scl: ${i2c2_scl}
+      flow_update_interval_seconds: ${flow_update_interval_seconds2}
 
 switch:
   # LED flashes faster/slower as magnet rotates on water meter
