@@ -23,11 +23,6 @@ substitutions:
   qmc5883l_oversampling: '64x'
 
   volume_per_half_rotation_initial_value: '0.01008156'
-  temperature_offset_initial_value: '33'
-  threshold_lower_initial_value: '-9999'
-  threshold_upper_initial_value: '9999'
-  calibration_seconds_initial_value: '5'
-  axis_initial_option: 'None'
   flow_update_interval_seconds: '10'
 
 esphome:
@@ -117,7 +112,7 @@ number:
     update_interval: never
     optimistic: true
     restore_value: true
-    initial_value: ${temperature_offset_initial_value}
+    initial_value: 33
     icon: 'mdi:thermometer'
     entity_category: config
 
@@ -129,7 +124,7 @@ number:
     min_value: -9999
     max_value: 9999
     step: 0.1
-    initial_value: ${threshold_lower_initial_value}
+    initial_value: -9999
     update_interval: never
     restore_value: true
     optimistic: true
@@ -143,7 +138,7 @@ number:
     min_value: -9999
     max_value: 9999
     step: 0.1
-    initial_value: ${threshold_upper_initial_value}
+    initial_value: 9999
     update_interval: never
     restore_value: true
     optimistic: true
@@ -158,7 +153,7 @@ number:
     min_value: 1
     max_value: 999
     step: 1
-    initial_value: ${calibration_seconds_initial_value}
+    initial_value: 5
     update_interval: never
     restore_value: true
     optimistic: true
@@ -174,7 +169,7 @@ select:
       - y
       - z
       - None
-    initial_option: ${axis_initial_option}
+    initial_option: None
     update_interval: never
     restore_value: true
     optimistic: true
@@ -241,9 +236,9 @@ button:
           float upper_threshold = max - threshold_offset;
           ESP_LOGI("${prefix_id}calibration", "Selected %s axis with lower threshold: %.2f and upper threshold: %.2f",
                    axis_with_largest_range.c_str(), lower_threshold, upper_threshold);
-          id(${prefix_id}axis).publish_state(axis_with_largest_range);
-          id(${prefix_id}threshold_lower).publish_state(roundf(lower_threshold * 10) / 10);
-          id(${prefix_id}threshold_upper).publish_state(roundf(upper_threshold * 10) / 10);
+          id(${prefix_id}axis).make_call().set_option(axis_with_largest_range).perform();
+          id(${prefix_id}threshold_lower).make_call().set_value(roundf(lower_threshold * 10) / 10).perform();
+          id(${prefix_id}threshold_upper).make_call().set_value(roundf(upper_threshold * 10) / 10).perform();
 
 interval:
   - interval: ${qmc5883l_update_interval}
