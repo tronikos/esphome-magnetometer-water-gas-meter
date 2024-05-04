@@ -215,43 +215,29 @@ button:
           }
           std::string axis_with_largest_range;
           float min, max;
-          if (x_range > 10 && x_range > y_range && x_range > z_range) {
+          if (x_range > 20 && x_range > y_range && x_range > z_range) {
             axis_with_largest_range = "x";
             min = id(${prefix_id}calibrating_axis_x_min);
             max = id(${prefix_id}calibrating_axis_x_max);
-          } else if (y_range > 10 && y_range > x_range && y_range > z_range) {
+          } else if (y_range > 20 && y_range > x_range && y_range > z_range) {
             axis_with_largest_range = "y";
             min = id(${prefix_id}calibrating_axis_y_min);
             max = id(${prefix_id}calibrating_axis_y_max);
-          } else if (z_range > 10 && z_range > x_range && z_range > y_range) {
+          } else if (z_range > 20 && z_range > x_range && z_range > y_range) {
             axis_with_largest_range = "z";
             min = id(${prefix_id}calibrating_axis_z_min);
             max = id(${prefix_id}calibrating_axis_z_max);
           } else {
-            ESP_LOGE("${prefix_id}calibration", "Calibration failed. No axis had a range of at least 10");
+            ESP_LOGE("${prefix_id}calibration", "Calibration failed. No axis had a range of at least 20");
             return;
           }
-          float threshold_offset = 0.25 * (max - min);
-          float lower_threshold = min + threshold_offset;
-          float upper_threshold = max - threshold_offset;
+          float lower_threshold = (max - min) / 2 - 5;
+          float upper_threshold = (max - min) / 2 + 5;
           ESP_LOGI("${prefix_id}calibration", "Selected %s axis with lower threshold: %.2f and upper threshold: %.2f",
                    axis_with_largest_range.c_str(), lower_threshold, upper_threshold);
           id(${prefix_id}axis).make_call().set_option(axis_with_largest_range).perform();
           id(${prefix_id}threshold_lower).make_call().set_value(roundf(lower_threshold * 10) / 10).perform();
           id(${prefix_id}threshold_upper).make_call().set_value(roundf(upper_threshold * 10) / 10).perform();
-
-interval:
-  - interval: ${qmc5883l_update_interval}
-    then:
-      - lambda: |-
-          if (id(${prefix_id}calibrating)) {
-            id(${prefix_id}calibrating_axis_x_min) = min(id(${prefix_id}calibrating_axis_x_min), id(${prefix_id}qmc5883l_axis_x).state);
-            id(${prefix_id}calibrating_axis_x_max) = max(id(${prefix_id}calibrating_axis_x_max), id(${prefix_id}qmc5883l_axis_x).state);
-            id(${prefix_id}calibrating_axis_y_min) = min(id(${prefix_id}calibrating_axis_y_min), id(${prefix_id}qmc5883l_axis_y).state);
-            id(${prefix_id}calibrating_axis_y_max) = max(id(${prefix_id}calibrating_axis_y_max), id(${prefix_id}qmc5883l_axis_y).state);
-            id(${prefix_id}calibrating_axis_z_min) = min(id(${prefix_id}calibrating_axis_z_min), id(${prefix_id}qmc5883l_axis_z).state);
-            id(${prefix_id}calibrating_axis_z_max) = max(id(${prefix_id}calibrating_axis_z_max), id(${prefix_id}qmc5883l_axis_z).state);
-          }
 
 i2c:
   - id: ${prefix_id}i2c_bus
@@ -293,7 +279,12 @@ sensor:
       entity_category: diagnostic
       on_raw_value:
         then:
-          - lambda: if (id(${prefix_id}axis).state == "x") id(${prefix_id}axis_value).publish_state(x);
+          - lambda:
+              if (id(${prefix_id}axis).state == "x") id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}calibrating)) {
+                id(${prefix_id}calibrating_axis_x_min) = min(id(${prefix_id}calibrating_axis_x_min), x);
+                id(${prefix_id}calibrating_axis_x_max) = max(id(${prefix_id}calibrating_axis_x_max), x);
+              }
       filters:
         - delta: 3
     field_strength_y:
@@ -303,7 +294,12 @@ sensor:
       entity_category: diagnostic
       on_raw_value:
         then:
-          - lambda: if (id(${prefix_id}axis).state == "y") id(${prefix_id}axis_value).publish_state(x);
+          - lambda: |-
+              if (id(${prefix_id}axis).state == "y") id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}calibrating)) {
+                id(${prefix_id}calibrating_axis_y_min) = min(id(${prefix_id}calibrating_axis_y_min), x);
+                id(${prefix_id}calibrating_axis_y_max) = max(id(${prefix_id}calibrating_axis_y_max), x);
+              }
       filters:
         - delta: 3
     field_strength_z:
@@ -313,7 +309,12 @@ sensor:
       entity_category: diagnostic
       on_raw_value:
         then:
-          - lambda: if (id(${prefix_id}axis).state == "z") id(${prefix_id}axis_value).publish_state(x);
+          - lambda:
+              if (id(${prefix_id}axis).state == "z") id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}calibrating)) {
+                id(${prefix_id}calibrating_axis_z_min) = min(id(${prefix_id}calibrating_axis_z_min), x);
+                id(${prefix_id}calibrating_axis_z_max) = max(id(${prefix_id}calibrating_axis_z_max), x);
+              }
       filters:
         - delta: 3
     temperature:
