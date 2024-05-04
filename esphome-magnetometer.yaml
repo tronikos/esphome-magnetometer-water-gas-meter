@@ -182,14 +182,12 @@ button:
     on_press:
       - lambda: |-
           ESP_LOGI("calibration", "Starting calibration. Make sure ${device_class} is running");
-          // Not using std::numeric_limits<float>::min() or max because of
-          // https://github.com/tronikos/esphome-magnetometer-water-gas-meter/issues/2#issuecomment-2094041296
-          id(${prefix_id}calibrating_axis_x_min) = 9999;
-          id(${prefix_id}calibrating_axis_x_max) = -9999;
-          id(${prefix_id}calibrating_axis_y_min) = 9999;
-          id(${prefix_id}calibrating_axis_y_max) = -9999;
-          id(${prefix_id}calibrating_axis_z_min) = 9999;
-          id(${prefix_id}calibrating_axis_z_max) = -9999;
+          id(${prefix_id}calibrating_axis_x_min) = std::numeric_limits<float>::max();
+          id(${prefix_id}calibrating_axis_x_max) = std::numeric_limits<float>::lowest();
+          id(${prefix_id}calibrating_axis_y_min) = std::numeric_limits<float>::max();
+          id(${prefix_id}calibrating_axis_y_max) = std::numeric_limits<float>::lowest();
+          id(${prefix_id}calibrating_axis_z_min) = std::numeric_limits<float>::max();
+          id(${prefix_id}calibrating_axis_z_max) = std::numeric_limits<float>::lowest();
           id(${prefix_id}calibrating) = true;
       - delay: !lambda return id(${prefix_id}calibration_seconds).state * 1000;
       - lambda: |-
