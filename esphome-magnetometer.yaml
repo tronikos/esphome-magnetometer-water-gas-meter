@@ -280,6 +280,7 @@ sensor:
       on_raw_value:
         then:
           - lambda:
+              if (!x) return;
               if (id(${prefix_id}axis).state == "x") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_x_min) = min(id(${prefix_id}calibrating_axis_x_min), x);
@@ -295,6 +296,7 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
+              if (!x) return;
               if (id(${prefix_id}axis).state == "y") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_y_min) = min(id(${prefix_id}calibrating_axis_y_min), x);
@@ -310,6 +312,7 @@ sensor:
       on_raw_value:
         then:
           - lambda:
+              if (!x) return;
               if (id(${prefix_id}axis).state == "z") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_z_min) = min(id(${prefix_id}calibrating_axis_z_min), x);
