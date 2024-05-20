@@ -2,6 +2,9 @@
 substitutions:
   # For gas one of: CCF, ft³, m³
   volume_unit: 'ft³'
+  # The most common value in US seems to be 0.125 ft³
+  # If you modify the volume_unit, modify this too,
+  # just search on Google: 0.125 ft³ to CCF (or whatever unit you selected)
   volume_per_half_rotation_initial_value: '0.125'
   flow_update_interval_seconds: '30'
 
