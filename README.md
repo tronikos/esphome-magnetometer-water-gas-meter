@@ -245,8 +245,10 @@ So for a 5/8" Neptune T-10 you will set this to `0.00864902` (2 / 231.24)
 If you have the Flume water sensor you can use its lowest reported value. You can find it with:
 `select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;`
 
-For water meters this defaults to `0.01008156` which is for my 3/4" Badge Meter Model 35.
-For gas meters this defaults to `0.125` which seems to be the most common in US.
+For water meters this defaults to `0.01008156 gal` which is for my 3/4" Badge Meter Model 35.
+For gas meters this defaults to `0.125 ft³` which seems to be the most common in US.
+If you have modified the `volume_unit` you have to manually convert this value.
+E.g. if for gas you used `volume_unit: 'CCF'` then you need to set the volume per half rotation to: `0.00125 CCF` (just search on Google `0.125 ft³ to CCF`).
 
 ### Temperature
 
