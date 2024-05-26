@@ -1,4 +1,7 @@
 ---
+logger:
+  logs:
+    hmc5883l: INFO
 number:
   - id: !remove ${prefix_id}temperature_offset
 sensor:
