@@ -1,6 +1,6 @@
 # esphome-magnetometer-water-gas-meter [![Made for ESPHome](https://img.shields.io/badge/Made_for-ESPHome-black?logo=esphome)](https://esphome.io)
 
-This [ESPHome](https://esphome.io) package allows reading your water meter or gas meter  using the QMC5883L, a triple-axis magnetometer.
+This [ESPHome](https://esphome.io) package allows reading your water meter or gas meter using the QMC5883L or HMC5883L, a triple-axis magnetometer.
 
 TLDR; Add this to your ESPHome device configuration:
 
@@ -17,7 +17,9 @@ packages:
     file: esphome-water-meter.yaml
     # Or for gas meter:
     # file: esphome-gas-meter.yaml
-    refresh: 0s
+    # Or if you are using HMC5883L instead of QMC5883L:
+    # files: [esphome-water-meter.yaml, hmc5883l.yaml]
+    refresh: 0s  
 ```
 
 <img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/9363747e-ea4d-457b-b219-90f0192fcf8d" alt="Water meter in Home Assistant" width=40%>
@@ -67,17 +69,17 @@ To verify compatibility install the Sensors app on your phone, place your phone 
 - ESP8266 or ESP32 with power adapter
   - I placed mine inside the garage
   - For high flow meters ESP32 is preferred because it's faster
-- QMC5883L
+- QMC5883L or HMC5883L magnetometer
   - I placed mine in the water meter box 20ft away from the garage
 - Ethernet cable
   - I used 32.8ft or 10m direct burial CAT6.
   - CAT6 is preferred because of its lower capacitance. CAT5 50ft or 15m [should work](https://www.youtube.com/watch?v=6v1KZBRZRCI). For 100ft you will need an active terminator such as [LTC4311](https://www.youtube.com/watch?v=nhWPxO7jx_o).
-- Some way to weather proof the QMC5883L. Some options:
+- Some way to weather proof the magnetometer. Some options:
   - Adhesive 4:1 heat shrink tubing (this is what I used)
   - Silicone sealant
   - Nail polish
   - Hot glue
-- Some way to mount the QMC5883L on the meter. Some options:
+- Some way to mount the magnetometer on the meter. Some options:
   - Cable zip tie (this is what I used)
   - Duct tape
 - Conduit for the ethernet cable. Can be skipped if using direct burial ethernet cable.
@@ -133,6 +135,8 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
         file: esphome-water-meter.yaml
         # Or for gas meter:
         # file: esphome-gas-meter.yaml
+        # Or if you are using HMC5883L instead of QMC5883L:
+        # files: [esphome-water-meter.yaml, hmc5883l.yaml]
         refresh: 0s
     ```
 
@@ -252,6 +256,7 @@ E.g. if for gas you used `volume_unit: 'CCF'` then you need to set the volume pe
 
 ### Temperature
 
+Only supported if you are using a QMC5883L.
 Place another temperature sensor next to the QMC5883L and adjust the temperature offset so that they match.
 
 ## Home Assistant alerts
