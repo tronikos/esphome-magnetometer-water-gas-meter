@@ -1,0 +1,9 @@
+---
+number:
+  - id: !remove ${prefix_id}temperature_offset
+sensor:
+  - id: !extend ${prefix_id}qmc5883l_id
+    platform: hmc5883l
+    address: 0x1E
+    oversampling: 1x
+    temperature: !remove ${prefix_id}qmc5883l_temperature
