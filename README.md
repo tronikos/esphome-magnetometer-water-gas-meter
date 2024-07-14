@@ -68,7 +68,7 @@ To verify compatibility install the Sensors app on your phone, place your phone 
 
 - ESP8266 or ESP32 with power adapter
   - I placed mine inside the garage
-  - For high flow meters ESP32 is preferred because it's faster
+  - For high flow meters a dual core ESP32 is strongly preferred
 - QMC5883L or HMC5883L magnetometer
   - I placed mine in the water meter box 20ft away from the garage
 - Ethernet cable
