@@ -349,7 +349,7 @@ In `/homeassistant/alerts.yaml` I have the following to keep alerting me every 5
 ```yaml
 water_leak:
   name: Water leak detected
-  message: "Water leak detected at {{ expand('binary_sensor.water_leak_sensors_group') | selectattr('state', '==', 'on') | map(attribute='attributes.friendly_name') | join(', ') | lower() | replace(': water leak sensor', '') }} {{ relative_time(states.binary_sensor.water_leak_sensors_group.last_changed) }} ago"
+  message: "Water leak detected at {{ expand('binary_sensor.water_leak_sensors_group') | selectattr('state', '==', 'on') | map(attribute='attributes.friendly_name') | join(', ') | lower() | replace(': water leak sensor', '') | replace(' leak sensor moisture', '') }} {{ relative_time(states.binary_sensor.water_leak_sensors_group.last_changed) }} ago"
   done_message: Water leak not detected anymore
   entity_id: binary_sensor.water_leak_sensors_group
   state: "on"
