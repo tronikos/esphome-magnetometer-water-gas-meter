@@ -9,6 +9,11 @@ substitutions:
   volume_unit: 'gal'
   i2c_scl: GPIO5  # D1
   i2c_sda: GPIO4  # D2
+  # Set to false only if needed during manual calibration.
+  # Do not keep them at false since these slow down the ESP device
+  # and reduce the accuracy during high flow.
+  hide_magnetic_field_strength_sensors: 'true'
+  hide_half_rotations_total_sensor: 'true'
 
 packages:
   meter:
@@ -19,7 +24,7 @@ packages:
     # file: esphome-gas-meter.yaml
     # Or if you are using HMC5883L instead of QMC5883L:
     # files: [esphome-water-meter.yaml, hmc5883l.yaml]
-    refresh: 0s  
+    refresh: 0s
 ```
 
 <img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/9363747e-ea4d-457b-b219-90f0192fcf8d" alt="Water meter in Home Assistant" width=40%>
@@ -127,6 +132,11 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
       volume_unit: 'gal'
       i2c_scl: GPIO5  # D1
       i2c_sda: GPIO4  # D2
+      # Set to false only if needed during manual calibration.
+      # Do not keep them at false since these slow down the ESP device
+      # and reduce the accuracy during high flow.
+      hide_magnetic_field_strength_sensors: 'true'
+      hide_half_rotations_total_sensor: 'true'
 
     packages:
       meter:
@@ -148,6 +158,11 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
       volume_unit: 'gal'
       i2c_scl: GPIO5  # D1
       i2c_sda: GPIO4  # D2
+      # Set to false only if needed during manual calibration.
+      # Do not keep them at false since these slow down the ESP device
+      # and reduce the accuracy during high flow.
+      hide_magnetic_field_strength_sensors: 'true'
+      hide_half_rotations_total_sensor: 'true'
 
     packages:
       meter:
@@ -209,7 +224,7 @@ To calibrate these just run a light stream of water/gas and press the "Calibrate
 
 Alternatively:
 
-1. Temporarily enable the Magnetic Field Strength X, Y, and Z sensors in HA.
+1. Temporarily set `hide_magnetic_field_strength_sensors: 'false'` to show the Magnetic Field Strength X, Y, and Z sensors in HA.
 2. Run a light stream of water/gas.
 3. Observe which axis changes the most and its range.
 4. Set the axis and thresholds. e.g. if y axis ranges from min to max use:
@@ -220,21 +235,13 @@ Alternatively:
     Threshold upper = max - 0.25 * (max - min)
     ```
 
-5. Disable the Magnetic Field Strength X, Y, and Z sensors in HA. Otherwise HA recorder will get overwhelmed.
+5. Set `hide_magnetic_field_strength_sensors: 'true'`.
 
 ### Volume per half rotation
 
 This depends on your specific water/gas meter model and its size.
 
-To calibrate:
-
-1. Temporarily enable the "Half rotations total" sensor in HA.
-2. Write it down and also write down the reading on your water/gas meter.
-3. After a few hours or even days of regular water/gas usage, write down both of them again.
-4. Set this to the result of: diff of readings in volume_unit divided by diff of half rotations.
-5. Disable the "Half rotations total" sensor in HA.
-
-Alternatively you can search for specifications of your specific water/gas meter and its size. e.g.
+You can search for specifications of your specific water/gas meter and its size. e.g.
 for [Neptune T-10](https://www.riotronics.com/wp-content/uploads/2019/11/NT10-4P-WaterRead-pdf3.01.pdf):
 
 Meter size | Pulses/Gallon
@@ -249,6 +256,14 @@ So for a 5/8" Neptune T-10 you will set this to `0.00864902` (2 / 231.24)
 
 If you have the Flume water sensor you can use its lowest reported value. You can find it with:
 `select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;`
+
+Alternatively:
+
+1. Temporarily set `hide_half_rotations_total_sensor: 'false'` to show the "Half rotations total" sensor in HA.
+2. Write it down and also write down the reading on your water/gas meter.
+3. After a few hours or even days of regular water/gas usage, write down both of them again.
+4. Set this to the result of: diff of readings in volume_unit divided by diff of half rotations.
+5. Set `hide_half_rotations_total_sensor: 'true'`.
 
 For water meters this defaults to `0.01008156 gal` which is for my 3/4" Badge Meter Model 35.
 For gas meters this defaults to `0.125 ft³` which seems to be the most common in US.

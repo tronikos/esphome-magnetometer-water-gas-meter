@@ -25,6 +25,9 @@ substitutions:
   volume_per_half_rotation_initial_value: '0.01008156'
   flow_update_interval_seconds: '10'
 
+  hide_magnetic_field_strength_sensors: 'true'
+  hide_half_rotations_total_sensor: 'true'
+
 esphome:
   min_version: "2024.4.0" # This version includes https://github.com/esphome/esphome/pull/6456
   # Default loop interval is 16ms. Setting it to 0 to make updates faster.
@@ -275,7 +278,7 @@ sensor:
     field_strength_x:
       id: ${prefix_id}qmc5883l_axis_x
       name: ${prefix_name}Magnetic Field Strength X
-      disabled_by_default: true
+      internal: ${hide_magnetic_field_strength_sensors}
       entity_category: diagnostic
       on_raw_value:
         then:
@@ -290,7 +293,7 @@ sensor:
     field_strength_y:
       id: ${prefix_id}qmc5883l_axis_y
       name: ${prefix_name}Magnetic Field Strength Y
-      disabled_by_default: true
+      internal: ${hide_magnetic_field_strength_sensors}
       entity_category: diagnostic
       on_raw_value:
         then:
@@ -305,7 +308,7 @@ sensor:
     field_strength_z:
       id: ${prefix_id}qmc5883l_axis_z
       name: ${prefix_name}Magnetic Field Strength Z
-      disabled_by_default: true
+      internal: ${hide_magnetic_field_strength_sensors}
       entity_category: diagnostic
       on_raw_value:
         then:
@@ -336,7 +339,7 @@ sensor:
     name: ${prefix_name}Half rotations total
     lambda: return id(${prefix_id}half_rotations_total);
     update_interval: 1s
-    disabled_by_default: true
+    internal: ${hide_half_rotations_total_sensor}
     entity_category: diagnostic
     accuracy_decimals: 0
     state_class: 'total_increasing'
