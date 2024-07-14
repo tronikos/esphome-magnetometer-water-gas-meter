@@ -72,7 +72,7 @@ To verify compatibility install the Sensors app on your phone, place your phone 
 - QMC5883L or HMC5883L magnetometer
   - I placed mine in the water meter box 20ft away from the garage
 - Ethernet cable
-  - I used 32.8ft or 10m direct burial CAT6.
+  - I used 32.8ft or 10m direct burial CAT6. A user has reported they successfully used 75ft or 22.9m direct burial CAT6.
   - CAT6 is preferred because of its lower capacitance. CAT5 50ft or 15m [should work](https://www.youtube.com/watch?v=6v1KZBRZRCI). For 100ft you will need an active terminator such as [LTC4311](https://www.youtube.com/watch?v=nhWPxO7jx_o).
 - Some way to weather proof the magnetometer. Some options:
   - Adhesive 4:1 heat shrink tubing (this is what I used)
