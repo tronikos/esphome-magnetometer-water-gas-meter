@@ -84,6 +84,7 @@ To verify compatibility install the Sensors app on your phone, place your phone 
   - Silicone sealant
   - Nail polish
   - Hot glue
+  - Liquid electrical tape
 - Some way to mount the magnetometer on the meter. Some options:
   - Cable zip tie (this is what I used)
   - Duct tape
