@@ -385,7 +385,7 @@ water_leak_tts:
     tts_text: "Water leak detected"
 ```
 
-In my main dashboard I have the following [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) cards, which are typically hidden when empty:
+In my main dashboard I have the following [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) card, which is typically hidden when empty:
 
 ```yaml
 type: custom:auto-entities
@@ -399,28 +399,11 @@ filter:
     - domain: alert
       not:
         state: idle
-sort:
-  method: friendly_name
-```
-
-```yaml
-type: custom:auto-entities
-show_empty: false
-card:
-  title: Active alert sensors
-  type: entities
-  state_color: true
-filter:
-  include:
-    - attributes:
+    - domain: binary_sensor
+      attributes:
         device_class: moisture
-      state: 'on'
-    - attributes:
-        device_class: smoke
-      state: 'on'
-    - attributes:
-        device_class: carbon_monoxide
-      state: 'on'
+      not:
+        state: 'off'
 ```
 
 In `Settings > Devices & services > Helpers` I have created a Utility Meter `sensor.water_meter_daily_total` to keep track of my daily water usage.
