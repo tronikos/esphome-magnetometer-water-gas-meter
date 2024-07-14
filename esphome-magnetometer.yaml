@@ -38,6 +38,7 @@ esphome:
       - lambda: App.set_loop_interval(0);
 
 logger:
+  level: INFO
   logs:
     qmc5883l: INFO
 
