@@ -81,10 +81,10 @@ To verify compatibility install the Sensors app on your phone, place your phone 
   - CAT6 is preferred because of its lower capacitance. CAT5 50ft or 15m [should work](https://www.youtube.com/watch?v=6v1KZBRZRCI). For 100ft you will need an active terminator such as [LTC4311](https://www.youtube.com/watch?v=nhWPxO7jx_o).
 - Some way to weather proof the magnetometer. Some options:
   - Adhesive 4:1 heat shrink tubing (this is what I used)
+  - Liquid electrical tape
   - Silicone sealant
   - Nail polish
   - Hot glue
-  - Liquid electrical tape
 - Some way to mount the magnetometer on the meter. Some options:
   - Cable zip tie (this is what I used)
   - Duct tape
