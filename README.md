@@ -254,7 +254,7 @@ Meter size | Pulses/Gallon
 1 1/2"     | 27.03
 2"         | 14.92
 
-So for a 5/8" Neptune T-10 you will set this to `0.00864902` (2 / 231.24)
+So for a 5/8" Neptune T-10 you will set this to `0.00432451` (1 / 231.24)
 
 If you have the Flume water sensor you can use its lowest reported value. You can find it with:
 `select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;`
