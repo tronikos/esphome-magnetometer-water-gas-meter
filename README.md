@@ -243,18 +243,7 @@ Alternatively:
 
 This depends on your specific water/gas meter model and its size.
 
-You can search for specifications of your specific water/gas meter and its size. e.g.
-for [Neptune T-10](https://www.riotronics.com/wp-content/uploads/2019/11/NT10-4P-WaterRead-pdf3.01.pdf):
-
-Meter size | Pulses/Gallon
---- | ---
-5/8"       | 231.24
-3/4"       | 129.04
-1"         | 60.32
-1 1/2"     | 27.03
-2"         | 14.92
-
-So for a 5/8" Neptune T-10 you will set this to `0.00432451` (1 / 231.24)
+You can search for specifications of your specific water/gas meter and its size.
 
 If you have the Flume water sensor you can use its lowest reported value. You can find it with:
 `select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;`
