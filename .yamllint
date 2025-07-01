@@ -3,9 +3,9 @@ extends: default
 
 rules:
   line-length:
-    level: warning
-    allow-non-breakable-inline-mappings: true
+    max: 150
   truthy:
+    level: error
     check-keys: false
 
 ignore: |

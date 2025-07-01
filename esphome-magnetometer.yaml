@@ -30,7 +30,7 @@ substitutions:
   hide_half_rotations_total_sensor: 'true'
 
 esphome:
-  min_version: "2024.4.0" # This version includes https://github.com/esphome/esphome/pull/6456
+  min_version: "2024.4.0"  # This version includes https://github.com/esphome/esphome/pull/6456
   # Default loop interval is 16ms. Setting it to 0 to make updates faster.
   # Without setting this, the actual update interval of qmc5883l is: 6ms on ESP32, 10ms on ESP8266.
   # With this, it's 5ms on ESP32, 8ms on ESP8266.
@@ -58,38 +58,38 @@ api:
 globals:
   - id: ${prefix_id}half_rotations_total
     type: long
-    restore_value: yes
+    restore_value: true
     initial_value: '0'
   - id: ${prefix_id}half_rotations_flow
     type: long
-    restore_value: no
+    restore_value: false
     initial_value: '0'
   - id: ${prefix_id}axis_value_high
     type: bool
-    restore_value: no
+    restore_value: false
     initial_value: 'false'
   - id: ${prefix_id}calibrating
     type: bool
-    restore_value: no
+    restore_value: false
     initial_value: 'false'
   - id: ${prefix_id}calibrating_axis_x_min
     type: float
-    restore_value: no
+    restore_value: false
   - id: ${prefix_id}calibrating_axis_x_max
     type: float
-    restore_value: no
+    restore_value: false
   - id: ${prefix_id}calibrating_axis_y_min
     type: float
-    restore_value: no
+    restore_value: false
   - id: ${prefix_id}calibrating_axis_y_max
     type: float
-    restore_value: no
+    restore_value: false
   - id: ${prefix_id}calibrating_axis_z_min
     type: float
-    restore_value: no
+    restore_value: false
   - id: ${prefix_id}calibrating_axis_z_max
     type: float
-    restore_value: no
+    restore_value: false
 
 number:
   - platform: template
@@ -216,7 +216,6 @@ button:
           float y_range = id(${prefix_id}calibrating_axis_y_max) - id(${prefix_id}calibrating_axis_y_min);
           float z_range = id(${prefix_id}calibrating_axis_z_max) - id(${prefix_id}calibrating_axis_z_min);
           float min_axis_range = id(${prefix_id}calibration_minimal_axis_range).state;
-          
           if (x_range < 0) {
             ESP_LOGW("${prefix_id}calibration", "Didn't get any values for x");
           } else {
