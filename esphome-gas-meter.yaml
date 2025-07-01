@@ -7,6 +7,7 @@ substitutions:
   # If you modify the volume_unit, modify this too,
   # just search on Google: 0.125 ft³ to CCF (or whatever unit you selected)
   volume_per_half_rotation_initial_value: '0.125'
+  calibration_minimal_axis_range_initial_value: '15'
   flow_update_interval_seconds: '30'
 
 packages:

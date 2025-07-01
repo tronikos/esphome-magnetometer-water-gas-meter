@@ -227,6 +227,7 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
 ### Magnetic field axis and thresholds
 
 To calibrate these just run a light stream of water/gas and press the "Calibrate axis" button. After 5 seconds (configurable) the proper axis and thresholds should be set.
+If not, check the device logs. You might have to lower the "Calibration minimal axis range".
 
 Alternatively:
 

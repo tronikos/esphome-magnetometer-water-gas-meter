@@ -23,6 +23,7 @@ substitutions:
   qmc5883l_oversampling: '64x'
 
   volume_per_half_rotation_initial_value: '0.01008156'
+  calibration_minimal_axis_range_initial_value: '20'
   flow_update_interval_seconds: '10'
 
   hide_magnetic_field_strength_sensors: 'true'
@@ -149,6 +150,21 @@ number:
     unit_of_measurement: µT
 
   - platform: template
+    id: ${prefix_id}calibration_minimal_axis_range
+    name: ${prefix_name}Calibration minimal axis range
+    entity_category: config
+    icon: mdi:sine-wave
+    mode: box
+    min_value: 10
+    max_value: 20
+    step: 1
+    initial_value: ${calibration_minimal_axis_range_initial_value}
+    update_interval: never
+    restore_value: true
+    optimistic: true
+    unit_of_measurement: µT
+
+  - platform: template
     id: ${prefix_id}calibration_seconds
     name: ${prefix_name}Calibration time
     entity_category: config
@@ -199,6 +215,8 @@ button:
           float x_range = id(${prefix_id}calibrating_axis_x_max) - id(${prefix_id}calibrating_axis_x_min);
           float y_range = id(${prefix_id}calibrating_axis_y_max) - id(${prefix_id}calibrating_axis_y_min);
           float z_range = id(${prefix_id}calibrating_axis_z_max) - id(${prefix_id}calibrating_axis_z_min);
+          float min_axis_range = id(${prefix_id}calibration_minimal_axis_range).state;
+          
           if (x_range < 0) {
             ESP_LOGW("${prefix_id}calibration", "Didn't get any values for x");
           } else {
@@ -219,24 +237,25 @@ button:
           }
           std::string axis_with_largest_range;
           float min, max;
-          if (x_range > 20 && x_range > y_range && x_range > z_range) {
+          if (x_range > min_axis_range && x_range > y_range && x_range > z_range) {
             axis_with_largest_range = "x";
             min = id(${prefix_id}calibrating_axis_x_min);
             max = id(${prefix_id}calibrating_axis_x_max);
-          } else if (y_range > 20 && y_range > x_range && y_range > z_range) {
+          } else if (y_range > min_axis_range && y_range > x_range && y_range > z_range) {
             axis_with_largest_range = "y";
             min = id(${prefix_id}calibrating_axis_y_min);
             max = id(${prefix_id}calibrating_axis_y_max);
-          } else if (z_range > 20 && z_range > x_range && z_range > y_range) {
+          } else if (z_range > min_axis_range && z_range > x_range && z_range > y_range) {
             axis_with_largest_range = "z";
             min = id(${prefix_id}calibrating_axis_z_min);
             max = id(${prefix_id}calibrating_axis_z_max);
           } else {
-            ESP_LOGE("${prefix_id}calibration", "Calibration failed. No axis had a range of at least 20");
+            ESP_LOGE("${prefix_id}calibration", "Calibration failed. No axis had a range of at least %.0f", min_axis_range);
             return;
           }
-          float lower_threshold = min + (max - min) / 2 - 5;
-          float upper_threshold = min + (max - min) / 2 + 5;
+          float tolerance = 5 / (20.0 / min_axis_range);
+          float lower_threshold = min + (max - min) / 2 - tolerance;
+          float upper_threshold = min + (max - min) / 2 + tolerance;
           ESP_LOGI("${prefix_id}calibration", "Selected %s axis with lower threshold: %.2f and upper threshold: %.2f",
                    axis_with_largest_range.c_str(), lower_threshold, upper_threshold);
           id(${prefix_id}axis).make_call().set_option(axis_with_largest_range).perform();
