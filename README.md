@@ -276,6 +276,115 @@ Place another temperature sensor next to the QMC5883L and adjust the temperature
 
 I'm using the [Alert integration](https://www.home-assistant.io/integrations/alert/) to get alerted if there is a leak.
 
+To find what thresholds and durations to use for your own water usage patterns, run this SQL query in the SQLite Web add-on with different `flow_threshold`:
+
+```sql
+-- This query calculates the longest continuous period the water meter was running each day,
+-- based on a defined flow rate threshold. It includes special handling for a daily
+-- "irrigation" window where the flow rate can be artificially reduced.
+
+WITH variables AS (
+  -- This is the main configuration block for the query.
+  -- All user-adjustable parameters are defined here for easy modification.
+  SELECT
+    1.5 AS flow_threshold,          -- The flow rate (e.g., in GPM or L/min) above which the water is considered "running".
+    0.3 AS irrigation_flow_reduction, -- The value to subtract from the flow rate during the irrigation window.
+    '07:00' AS irrigation_start_time,  -- The start time of the daily irrigation window (HH:MM).
+    '10:00' AS irrigation_end_time    -- The end time of the daily irrigation window (HH:MM).
+),
+all_corrected_states AS (
+  -- Step 1: Get all states for the target sensor and create an "effective_state".
+  -- This step applies the special logic for the irrigation window.
+  SELECT
+    state_id,
+    old_state_id,
+    last_updated_ts,
+    CASE
+      -- If the state's timestamp falls within the irrigation window, reduce its value.
+      WHEN STRFTIME('%H:%M', last_updated_ts, 'unixepoch', 'localtime') BETWEEN (SELECT irrigation_start_time FROM variables) AND (SELECT irrigation_end_time FROM variables)
+        THEN MAX(0, CAST(state AS REAL) - (SELECT irrigation_flow_reduction FROM variables)) -- Subtract the reduction, ensuring it doesn't go below zero.
+      -- Otherwise, just use the state's normal value.
+      ELSE CAST(state AS REAL)
+    END AS effective_state
+  FROM states
+  WHERE
+    -- Filter the states table to only include our specific water meter sensor.
+    metadata_id = (
+      SELECT metadata_id FROM states_meta WHERE entity_id = 'sensor.water_meter_flow'
+    )
+),
+state_pairs AS (
+  -- Step 2: Get the current state and the immediately preceding state on the same row.
+  -- This is done by joining the table to itself using the old_state_id, which links each state to the previous one.
+  SELECT
+    current_state.last_updated_ts,
+    current_state.effective_state AS effective_current_state,
+    prev_state.effective_state AS effective_prev_state
+  FROM
+    all_corrected_states AS current_state
+  JOIN
+    all_corrected_states AS prev_state ON current_state.old_state_id = prev_state.state_id
+),
+run_events AS (
+  -- Step 3: Analyze the state pairs to identify the exact moments a "run" starts or stops.
+  -- A "run" is defined by the flow rate crossing the 'flow_threshold' defined in the variables.
+  SELECT
+    last_updated_ts,
+    CASE
+      -- A "start" event (1) is when the flow crosses *above* the threshold.
+      WHEN effective_current_state > (SELECT flow_threshold FROM variables) AND effective_prev_state <= (SELECT flow_threshold FROM variables) THEN 1
+      -- A "stop" event (-1) is when the flow crosses *below* or becomes equal to the threshold.
+      WHEN effective_current_state <= (SELECT flow_threshold FROM variables) AND effective_prev_state > (SELECT flow_threshold FROM variables) THEN -1
+      -- Otherwise, it's not a significant event.
+      ELSE 0
+    END AS event_type
+  FROM state_pairs
+),
+run_periods AS (
+  -- Step 4: Match up each "start" event with its corresponding "stop" event.
+  -- This defines a complete, continuous run period.
+  SELECT
+    last_updated_ts AS start_time,
+    -- For every start event, look forward in time to find the timestamp of the very next stop event.
+    (
+      SELECT MIN(e2.last_updated_ts)
+      FROM run_events e2
+      WHERE e2.last_updated_ts > e1.last_updated_ts AND e2.event_type = -1
+    ) AS end_time
+  FROM run_events e1
+  -- We only care about the "start" events to begin our periods.
+  WHERE e1.event_type = 1
+),
+daily_ranked_runs AS (
+  -- Step 5: Calculate the duration of each run and rank them within each day.
+  SELECT
+    STRFTIME('%Y-%m-%d', start_time, 'unixepoch', 'localtime') AS run_day,
+    (end_time - start_time) AS duration_seconds,
+    start_time,
+    end_time,
+    -- The RANK() window function assigns a rank to each run (1 for the longest)
+    -- within each day (PARTITION BY run_day).
+    RANK() OVER (
+      PARTITION BY STRFTIME('%Y-%m-%d', start_time, 'unixepoch', 'localtime')
+      ORDER BY (end_time - start_time) DESC
+    ) as rank_num
+  FROM run_periods
+  -- Ignore any runs that may not have a corresponding stop event (e.g., if the water is still running).
+  WHERE end_time IS NOT NULL
+)
+-- Final Step: Select the longest run for each day and format the output for readability.
+SELECT
+  run_day,
+  duration_seconds / 60 AS duration_minutes,
+  DATETIME(start_time, 'unixepoch', 'localtime') AS run_start_time,
+  DATETIME(end_time, 'unixepoch', 'localtime') AS run_end_time
+-- Filter for only the top-ranked (longest) run for each day.
+FROM daily_ranked_runs
+WHERE rank_num = 1
+-- Order the results with the most recent day first.
+ORDER BY run_day DESC;
+```
+
 In `/homeassistant/configuration.yaml` I have:
 
 ```yaml
@@ -283,21 +392,31 @@ alert: !include alerts.yaml
 
 template:
   - sensor:
-    - name: Water running for 45 minutes
-      unique_id: water_running_45min
+    - name: Water running for 15 minutes
+      unique_id: water_running_too_long
       device_class: "moisture"
       icon: mdi:waves
       delay_on:
-        minutes: 45
+        minutes: 15
       # Subtract irrigation system that consumes 0.28 gal/min between 7 to 9 am or 8 to 10 am depending on DST
       state: "{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) > 0 }}"
-    - name: Water running for 20 minutes at more than 1.5 gal/min
-      unique_id: water_running_20min
+      availability: "{{ has_value('sensor.water_meter_flow') }}"
+    - name: Water running for 5 minutes at more than 1.0 gallons per minute
+      unique_id: water_running_med_flow_too_long
       device_class: "moisture"
       icon: mdi:waves
       delay_on:
-        minutes: 20
-      state: "{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) > 1.5 }}"
+        minutes: 5
+      state: "{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) > 1.0 }}"
+      availability: "{{ has_value('sensor.water_meter_flow') }}"
+    - name: Water running for 3 minutes at more than 1.7 gallons per minute
+      unique_id: water_running_high_flow_too_long
+      device_class: "moisture"
+      icon: mdi:waves
+      delay_on:
+        minutes: 3
+      state: "{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) > 1.7 }}"
+      availability: "{{ has_value('sensor.water_meter_flow') }}"
 
 notify:
   - platform: group
