@@ -1,6 +1,6 @@
 # esphome-magnetometer-water-gas-meter [![Made for ESPHome](https://img.shields.io/badge/Made_for-ESPHome-black?logo=esphome)](https://esphome.io)
 
-This [ESPHome](https://esphome.io) package allows reading your water meter or gas meter using the QMC5883L or HMC5883L, a triple-axis magnetometer.
+This [ESPHome](https://esphome.io) package allows reading your water meter or gas meter using the QMC5883L or HMC5883L or MMC5603, a triple-axis magnetometer.
 
 TLDR; Add this to your ESPHome device configuration:
 
@@ -24,6 +24,8 @@ packages:
     # file: esphome-gas-meter.yaml
     # Or if you are using HMC5883L instead of QMC5883L:
     # files: [esphome-water-meter.yaml, hmc5883l.yaml]
+    # Or if you are using MMC5603 instead of QMC5883L:
+    # files: [esphome-water-meter.yaml, mmc5603.yaml]
     refresh: 0s
 ```
 
@@ -74,7 +76,7 @@ To verify compatibility install the Sensors app on your phone, place your phone 
 - ESP8266 or ESP32 with power adapter
   - I placed mine inside the garage
   - For high flow meters a dual core ESP32 is strongly preferred
-- QMC5883L or HMC5883L magnetometer
+- QMC5883L or HMC5883L or MMC5603 magnetometer
   - I placed mine in the water meter box 20ft away from the garage
 - Ethernet cable
   - I used 32.8ft or 10m direct burial CAT6. A user has reported they successfully used 75ft or 22.9m direct burial CAT6.
@@ -149,6 +151,8 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
         # file: esphome-gas-meter.yaml
         # Or if you are using HMC5883L instead of QMC5883L:
         # files: [esphome-water-meter.yaml, hmc5883l.yaml]
+        # Or if you are using MMC5603 instead of QMC5883L:
+        # files: [esphome-water-meter.yaml, mmc5603.yaml]
         refresh: 0s
     ```
 

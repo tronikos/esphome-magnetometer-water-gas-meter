@@ -1,0 +1,12 @@
+---
+logger:
+  logs:
+    mmc5603: INFO
+number:
+  - id: !remove ${prefix_id}temperature_offset
+sensor:
+  - id: !extend ${prefix_id}qmc5883l_id
+    platform: mmc5603
+    address: 0x30
+    oversampling: !remove
+    temperature: !remove ${prefix_id}qmc5883l_temperature
