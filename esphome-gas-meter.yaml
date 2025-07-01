@@ -2,6 +2,8 @@
 substitutions:
   gpio_led: GPIO2
   # For gas one of: CCF, ft³, m³
+  # For better accuracy avoid using large units like CCF.
+  # You can always change the unit later in Home Assistant.
   volume_unit: 'ft³'
   # The most common value in US seems to be 0.125 ft³
   # If you modify the volume_unit, modify this too,

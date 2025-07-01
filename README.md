@@ -133,6 +133,8 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
     substitutions:
       # For water one of: CCF, ft³, gal, L, m³
       # For gas one of: CCF, ft³, m³
+      # For better accuracy avoid using large units like CCF and m³.
+      # You can always change the unit later in Home Assistant.
       volume_unit: 'gal'
       i2c_scl: GPIO5  # D1
       i2c_sda: GPIO4  # D2
@@ -264,7 +266,6 @@ Alternatively:
 For water meters this defaults to `0.01008156 gal` which is for my 3/4" Badge Meter Model 35.
 For gas meters this defaults to `0.125 ft³` which seems to be the most common in US.
 If you have modified the `volume_unit` you have to manually convert this value.
-E.g. if for gas you used `volume_unit: 'CCF'` then you need to set the volume per half rotation to: `0.00125 CCF` (just search on Google `0.125 ft³ to CCF`).
 
 ### Temperature
 
