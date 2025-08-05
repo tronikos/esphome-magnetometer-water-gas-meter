@@ -565,11 +565,11 @@ mode: single
 
 ## Troubleshooting
 
--   **No data from sensors:**
-    -   Double-check your wiring. VCC, GND, SCL, and SDA must be correct.
-    -   Verify the I2C address of your sensor in the ESPHome logs.
-    -   Your cable might be too long or poor quality. Try a shorter, shielded cable.
--   **Inaccurate readings:**
-    -   Recalibrate! Flow rate and totals depend entirely on correct calibration.
-    -   Ensure the sensor is mounted securely and hasn't shifted.
-    -   For high flow rates, an ESP8266 may not be able to keep up. Consider upgrading to an ESP32.
+- **No data from sensors:**
+  - Double-check your wiring. VCC, GND, SCL, and SDA must be correct.
+  - Verify the I2C address of your sensor in the ESPHome logs.
+  - Your cable might be too long or poor quality. Try a shorter, shielded cable.
+- **Inaccurate readings:**
+  - Recalibrate! Flow rate and totals depend entirely on correct calibration.
+  - Ensure the sensor is mounted securely and hasn't shifted.
+  - For high flow rates, an ESP8266 may not be able to keep up. Consider upgrading to an ESP32.
