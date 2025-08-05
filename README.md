@@ -272,11 +272,146 @@ If you have modified the `volume_unit` you have to manually convert this value.
 Only supported if you are using a QMC5883L.
 Place another temperature sensor next to the QMC5883L and adjust the temperature offset so that they match.
 
-## Home Assistant alerts
+## Home Assistant Integration Examples
 
-I'm using the [Alert integration](https://www.home-assistant.io/integrations/alert/) to get alerted if there is a leak.
+> **Disclaimer:** The following are advanced examples. You will need to adapt the entity IDs and thresholds to match your own setup and usage patterns.
 
-To find what thresholds and durations to use for your own water usage patterns, run this SQL query in the SQLite Web add-on with different `flow_threshold`:
+### Leak Alert Automation
+
+In `Settings > Devices & services > Helpers` I have created a template sensor: `sensor.water_meter_flow_minus_irrigation` with the following state template: `{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) }}`. My irrigation system consumes 0.28 gal/min between 7 to 9 am or 8 to 10 am depending on DST. You will need to adjust this to your irrigation system flow and times. If you don't have irrigation you can skip this and use `sensor.water_meter_flow` below.
+
+In `Settings > Automations` I have created the following automation to get notified if water runs continuously for too long, which could indicate a leak. It has logic to allow for longer run times (like showers) if a bathroom light is on.
+
+```yaml
+# This automation is provided as an example.
+# You MUST customize the following:
+# - entity_id: sensor.water_meter_flow_minus_irrigation (or your main flow sensor)
+# - The thresholds for flow rate (e.g., above: 1.7)
+# - The durations for each trigger (e.g., for: minutes: 3)
+# - The condition for exceptions (e.g., is_state('light.bathroom_upstairs_lights', 'off'))
+# - The notification service (e.g., notify.all, notify.nikos_mobile)
+
+alias: "Notify: water meter flow"
+description: "Sends critical alerts if water is running for an extended period."
+triggers:
+  - trigger: numeric_state
+    id: high_flow
+    entity_id: sensor.water_meter_flow_minus_irrigation
+    above: 1.7
+    for:
+      minutes: 3
+  - trigger: numeric_state
+    id: high_flow_bath_lights_on
+    entity_id: sensor.water_meter_flow_minus_irrigation
+    above: 1.7
+    for:
+      minutes: 8
+  - trigger: numeric_state
+    id: medium_flow
+    entity_id: sensor.water_meter_flow_minus_irrigation
+    above: 1
+    for:
+      minutes: 5
+  - trigger: numeric_state
+    id: medium_flow_bath_lights_on
+    entity_id: sensor.water_meter_flow_minus_irrigation
+    above: 1
+    for:
+      minutes: 10
+  - trigger: numeric_state
+    id: low_flow
+    entity_id: sensor.water_meter_flow_minus_irrigation
+    above: 0
+    for:
+      minutes: 15
+  - trigger: numeric_state
+    id: low_flow_bath_lights_on
+    entity_id: sensor.water_meter_flow_minus_irrigation
+    above: 0
+    for:
+      minutes: 20
+actions:
+  - variables:
+      initial_duration_seconds: "{{ trigger.for.total_seconds() }}"
+      alert_start_time: "{{ now() }}"
+  - if:
+      - condition: template
+        value_template: >-
+          {{ 'bath_lights_on' in trigger.id or
+          is_state('light.bathroom_upstairs_lights', 'off') }}
+    then:
+      - repeat:
+          until:
+            - condition: numeric_state
+              entity_id: sensor.water_meter_flow_minus_irrigation
+              below: 0.001
+          sequence:
+            - action: notify.all
+              data:
+                title: " Alert: Water Flow"
+                message: >-
+                  {% set time_since_alert_started = now() -
+                  as_datetime(alert_start_time) %}
+
+                  {% set total_duration_seconds = initial_duration_seconds +
+                  time_since_alert_started.total_seconds() %}
+
+                  Water flow is {{ states('sensor.water_meter_flow') | round(1)
+                  }} gallons per minute.
+
+                  Water has now been running for {{ (total_duration_seconds /
+                  60) | round(0) }} minutes.
+                data:
+                  tag: water-flow-alert
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1
+                  ttl: 0
+                  priority: high
+                  media_stream: alarm_stream_max
+            - action: notify.nikos_mobile
+              data:
+                message: TTS
+                data:
+                  ttl: 0
+                  priority: high
+                  media_stream: alarm_stream_max
+                  tts_text: Water flow alert
+            - delay:
+                seconds: 30
+```
+
+The group notifiers are defined in `/homeassistant/configuration.yaml`:
+
+```yaml
+notify:
+  - platform: group
+    name: nikos
+    services:
+      - service: persistent_notification
+      - service: mobile_app_pixel_7a
+      - service: mobile_app_le2125
+  - platform: group
+    name: nikos_mobile
+    services:
+      - service: mobile_app_pixel_7a
+      - service: mobile_app_le2125
+  - platform: group
+    name: wife
+    services:
+      - service: mobile_app_wife_iphone
+  - platform: group
+    name: all
+    services:
+      - service: nikos
+      - service: wife
+      - service: google_assistant_sdk
+      - service: alexa_media_garage_ecobee_switch
+```
+
+To find what thresholds and durations to use for your own water usage patterns, run this SQL query in the **SQLite Web** add-on with different `flow_threshold`:
 
 ```sql
 -- This query calculates the longest continuous period the water meter was running each day,
@@ -385,165 +520,19 @@ WHERE rank_num = 1
 ORDER BY run_day DESC;
 ```
 
-In `/homeassistant/configuration.yaml` I have:
+### Daily Usage Alert
+
+This automation checks your total consumption at the end of the day and notifies you if it's unusually high (possible leak) or low (possible sensor issue).
+
+First, create a **Utility Meter** helper in Home Assistant (`Settings > Devices & Services > Helpers`) to track the daily total from your `sensor.water_meter_total` entity.
 
 ```yaml
-alert: !include alerts.yaml
+# This automation requires a Utility Meter helper, e.g., 'sensor.water_meter_daily_total',
+# configured to track your main sensor's total volume with a daily cycle.
+# You MUST customize the high/low thresholds and notification service.
 
-template:
-  - sensor:
-    - name: Water running for 15 minutes
-      unique_id: water_running_too_long
-      device_class: "moisture"
-      icon: mdi:waves
-      delay_on:
-        minutes: 15
-      # Subtract irrigation system that consumes 0.28 gal/min between 7 to 9 am or 8 to 10 am depending on DST
-      state: "{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) > 0 }}"
-      availability: "{{ has_value('sensor.water_meter_flow') }}"
-    - name: Water running for 5 minutes at more than 1.0 gallons per minute
-      unique_id: water_running_med_flow_too_long
-      device_class: "moisture"
-      icon: mdi:waves
-      delay_on:
-        minutes: 5
-      state: "{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) > 1.0 }}"
-      availability: "{{ has_value('sensor.water_meter_flow') }}"
-    - name: Water running for 3 minutes at more than 1.7 gallons per minute
-      unique_id: water_running_high_flow_too_long
-      device_class: "moisture"
-      icon: mdi:waves
-      delay_on:
-        minutes: 3
-      state: "{{ max(0, states('sensor.water_meter_flow') | float - (0.3 if now().hour in range(7, 10) else 0)) > 1.7 }}"
-      availability: "{{ has_value('sensor.water_meter_flow') }}"
-
-notify:
-  - platform: group
-    name: nikos
-    services:
-      - service: persistent_notification
-      - service: mobile_app_pixel_7a
-      - service: mobile_app_le2125
-  - platform: group
-    name: nikos_mobile
-    services:
-      - service: mobile_app_pixel_7a
-      - service: mobile_app_le2125
-  - platform: group
-    name: wife
-    services:
-      - service: mobile_app_wife_iphone
-  - platform: group
-    name: all
-    services:
-      - service: nikos
-      - service: wife
-      - service: google_assistant_sdk
-      - service: alexa_media_garage_ecobee_switch
-```
-
-In `Settings > Devices & services > Helpers` I have created a group `binary_sensor.water_leak_sensors_group` with the above 2 sensors together with all my water leak sensors.
-
-In `Settings > Automations` I have created the following automation to get notified if I ever forget to add a new sensor to the group:
-
-```yaml
-alias: "Notify: incomplete groups"
-description: ""
-trigger:
-  - platform: time
-    at: "10:01:00"
-action:
-  - if:
-      - condition: template
-        value_template: "{{ missing_moisture_sensors != '' }}"
-    then:
-      - service: notify.nikos
-        data:
-          message: |-
-            binary_sensor.water_leak_sensors_group is missing:
-            {{missing_moisture_sensors}}
-variables:
-  missing_moisture_sensors: |
-    {{ states.binary_sensor
-        | rejectattr('attributes.device_class', 'undefined')
-        | selectattr('attributes.device_class', '==', 'moisture')
-        | rejectattr('attributes.entity_id', 'defined')
-        | map(attribute='entity_id')
-        | reject('in', states.binary_sensor.water_leak_sensors_group.attributes.entity_id)
-        | join('\n') }}
-mode: single
-```
-
-In `/homeassistant/alerts.yaml` I have the following to keep alerting me every 5 minutes in case of a leak:
-
-```yaml
-water_leak:
-  name: Water leak detected
-  message: "Water leak detected at {{ expand('binary_sensor.water_leak_sensors_group') | selectattr('state', '==', 'on') | map(attribute='attributes.friendly_name') | join(', ') | lower() | replace(': water leak sensor', '') | replace(' leak sensor moisture', '') }} {{ relative_time(states.binary_sensor.water_leak_sensors_group.last_changed) }} ago"
-  done_message: Water leak not detected anymore
-  entity_id: binary_sensor.water_leak_sensors_group
-  state: "on"
-  repeat: 5
-  can_acknowledge: true
-  skip_first: false
-  notifiers:
-    - all
-  data:
-    push:
-      sound:
-        name: "default"
-        critical: 1
-        volume: 1.0
-    ttl: 0
-    priority: high
-    media_stream: alarm_stream_max
-water_leak_tts:
-  name: Water leak detected (TTS)
-  message: TTS
-  done_message: Water leak not detected anymore
-  entity_id: binary_sensor.water_leak_sensors_group
-  state: "on"
-  repeat: 5
-  can_acknowledge: true
-  skip_first: false
-  notifiers:
-    - nikos_mobile
-  data:
-    ttl: 0
-    priority: high
-    media_stream: alarm_stream_max
-    tts_text: "Water leak detected"
-```
-
-In my main dashboard I have the following [auto-entities](https://github.com/thomasloven/lovelace-auto-entities) card, which is typically hidden when empty:
-
-```yaml
-type: custom:auto-entities
-show_empty: false
-card:
-  title: Active Alerts
-  type: entities
-  state_color: true
-filter:
-  include:
-    - domain: alert
-      not:
-        state: idle
-    - domain: binary_sensor
-      attributes:
-        device_class: moisture
-      not:
-        state: 'off'
-```
-
-In `Settings > Devices & services > Helpers` I have created a Utility Meter `sensor.water_meter_daily_total` to keep track of my daily water usage.
-
-In `Settings > Automations` I have created the following automation to get notified if my daily water usage is abnormal:
-
-```yaml
-alias: "Notify: water usage"
-description: ""
+alias: "Notify: Daily Water Usage"
+description: "Alerts if daily water consumption is abnormally high or low."
 trigger:
   - platform: time
     at: "23:59:00"
@@ -552,10 +541,9 @@ action:
   - if:
       - condition: numeric_state
         entity_id: sensor.water_meter_daily_total
-        above: 100
+        above: 100 # Adjust this to your typical high usage
     then:
-      - service: notify.nikos
-        metadata: {}
+      - service: notify.nikos # Change to your notification service
         data:
           title: High daily water usage
           message: >-
@@ -564,10 +552,9 @@ action:
   - if:
       - condition: numeric_state
         entity_id: sensor.water_meter_daily_total
-        below: 10
+        below: 10 # Adjust this to your typical low usage
     then:
-      - service: notify.nikos
-        metadata: {}
+      - service: notify.nikos # Change to your notification service
         data:
           title: Low daily water usage
           message: >-
@@ -575,3 +562,14 @@ action:
             Do you need to reposition or recalibrate the sensor?
 mode: single
 ```
+
+## Troubleshooting
+
+-   **No data from sensors:**
+    -   Double-check your wiring. VCC, GND, SCL, and SDA must be correct.
+    -   Verify the I2C address of your sensor in the ESPHome logs.
+    -   Your cable might be too long or poor quality. Try a shorter, shielded cable.
+-   **Inaccurate readings:**
+    -   Recalibrate! Flow rate and totals depend entirely on correct calibration.
+    -   Ensure the sensor is mounted securely and hasn't shifted.
+    -   For high flow rates, an ESP8266 may not be able to keep up. Consider upgrading to an ESP32.
