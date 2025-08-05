@@ -348,7 +348,7 @@ actions:
           sequence:
             - action: notify.all
               data:
-                title: " Alert: Water Flow"
+                title: "💧 Alert: Water Flow"
                 message: >-
                   {% set time_since_alert_started = now() -
                   as_datetime(alert_start_time) %}
@@ -533,17 +533,17 @@ First, create a **Utility Meter** helper in Home Assistant (`Settings > Devices 
 
 alias: "Notify: Daily Water Usage"
 description: "Alerts if daily water consumption is abnormally high or low."
-trigger:
-  - platform: time
+triggers:
+  - trigger: time
     at: "23:59:00"
-condition: []
-action:
+conditions: []
+actions:
   - if:
       - condition: numeric_state
         entity_id: sensor.water_meter_daily_total
-        above: 100 # Adjust this to your typical high usage
+        above: 150 # Adjust this to your typical high usage
     then:
-      - service: notify.nikos # Change to your notification service
+      - action: notify.nikos # Change to your notification service
         data:
           title: High daily water usage
           message: >-
@@ -554,7 +554,7 @@ action:
         entity_id: sensor.water_meter_daily_total
         below: 10 # Adjust this to your typical low usage
     then:
-      - service: notify.nikos # Change to your notification service
+      - action: notify.nikos # Change to your notification service
         data:
           title: Low daily water usage
           message: >-
