@@ -1,0 +1,16 @@
+---
+external_components:
+  - source: github://mazzhead/esphome-components@main
+    components: [qmc5883p]
+
+logger:
+  logs:
+    qmc5883p: INFO
+number:
+  - id: !remove ${prefix_id}temperature_offset
+sensor:
+  - id: !extend ${prefix_id}qmc5883l_id
+    platform: qmc5883p
+    address: 0x2C
+    oversampling: 1x
+    temperature: !remove ${prefix_id}qmc5883l_temperature
