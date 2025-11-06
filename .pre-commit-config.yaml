@@ -1,6 +1,4 @@
 ---
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
 repos:
   - repo: https://github.com/adrienverge/yamllint.git
     rev: v1.37.1
@@ -15,8 +13,5 @@ repos:
     hooks:
       - id: codespell
 
-# Configuration per https://pre-commit.ci/#configuration
 ci:
   autoupdate_schedule: monthly
-  skip: [no-commit-to-branch]
-  autoupdate_commit_msg: 'ci(pre-commit.ci): pre-commit autoupdate'
