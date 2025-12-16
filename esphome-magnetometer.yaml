@@ -33,6 +33,19 @@ substitutions:
   hide_magnetic_field_strength_sensors: 'true'
   hide_half_rotations_total_sensor: 'true'
 
+  # Tuning parameters for the Min/Max Tracker algorithm:
+  # The algorithm can detect arbitrarily slow leaks - the only limit is the volume
+  # per half-rotation. These parameters control drift adaptation:
+  #
+  # Decay rate per tick (~5ms). Controls how fast the tracker follows thermal drift.
+  # 0.0005 = ~6 µT/min. Increase if you see false triggers from temperature changes.
+  tracker_decay_rate: '0.0005'
+  # Minimum span as fraction of calibrated magnet_span. Keeps the detection window
+  # open when flow stops, ensuring slow leaks are still detected.
+  # 0.8 = window stays at 80% of calibrated size. Lower = tighter window, more
+  # resistant to noise but may miss weak magnet signals near threshold edges.
+  min_span_multiplier: '0.8'
+
 esphome:
   min_version: "2025.11.0"
   # Default loop interval is 16ms. Setting it to 0 to make updates faster.
@@ -76,6 +89,18 @@ globals:
     type: bool
     restore_value: false
     initial_value: 'false'
+
+  # TRACKERS for Min/Max Algorithm (initialized to NAN, set on first reading)
+  - id: ${prefix_id}track_min
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: ${prefix_id}track_max
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+
+  # Calibration Vars
   - id: ${prefix_id}calibrating_axis_x_min
     type: float
     restore_value: false
@@ -125,6 +150,21 @@ number:
     initial_value: 33
     icon: 'mdi:thermometer'
     entity_category: config
+
+  - platform: template
+    id: ${prefix_id}magnet_span
+    name: ${prefix_name}Magnet Span
+    entity_category: config
+    mode: box
+    min_value: 1.0
+    max_value: 2000
+    step: 0.1
+    initial_value: 40.0
+    update_interval: never
+    restore_value: true
+    optimistic: true
+    unit_of_measurement: µT
+    icon: mdi:arrow-expand-vertical
 
   - platform: template
     id: ${prefix_id}threshold_lower
@@ -202,6 +242,19 @@ select:
     restore_value: true
     optimistic: true
 
+  - platform: template
+    id: ${prefix_id}detection_algorithm
+    name: ${prefix_name}Detection algorithm
+    entity_category: config
+    icon: mdi:auto-fix
+    options:
+      - Threshold
+      - Adaptive
+    initial_option: Threshold
+    update_interval: never
+    restore_value: true
+    optimistic: true
+
 button:
   - platform: template
     id: ${prefix_id}calibrate_button
@@ -225,50 +278,64 @@ button:
           float y_range = id(${prefix_id}calibrating_axis_y_max) - id(${prefix_id}calibrating_axis_y_min);
           float z_range = id(${prefix_id}calibrating_axis_z_max) - id(${prefix_id}calibrating_axis_z_min);
           float min_axis_range = id(${prefix_id}calibration_minimal_axis_range).state;
+          // Log diagnostic info for each axis
           if (x_range < 0) {
             ESP_LOGW("${prefix_id}calibration", "Didn't get any values for x");
           } else {
-            ESP_LOGI("${prefix_id}calibration", "x ranged from %.2f to %.2f",
-                     id(${prefix_id}calibrating_axis_x_min), id(${prefix_id}calibrating_axis_x_max));
+            ESP_LOGI("${prefix_id}calibration", "x ranged from %.2f to %.2f (range: %.2f)",
+                     id(${prefix_id}calibrating_axis_x_min), id(${prefix_id}calibrating_axis_x_max), x_range);
           }
           if (y_range < 0) {
             ESP_LOGW("${prefix_id}calibration", "Didn't get any values for y");
           } else {
-            ESP_LOGI("${prefix_id}calibration", "y ranged from %.2f to %.2f",
-                     id(${prefix_id}calibrating_axis_y_min), id(${prefix_id}calibrating_axis_y_max));
+            ESP_LOGI("${prefix_id}calibration", "y ranged from %.2f to %.2f (range: %.2f)",
+                     id(${prefix_id}calibrating_axis_y_min), id(${prefix_id}calibrating_axis_y_max), y_range);
           }
           if (z_range < 0) {
             ESP_LOGW("${prefix_id}calibration", "Didn't get any values for z");
           } else {
-            ESP_LOGI("${prefix_id}calibration", "z ranged from %.2f to %.2f",
-                     id(${prefix_id}calibrating_axis_z_min), id(${prefix_id}calibrating_axis_z_max));
+            ESP_LOGI("${prefix_id}calibration", "z ranged from %.2f to %.2f (range: %.2f)",
+                     id(${prefix_id}calibrating_axis_z_min), id(${prefix_id}calibrating_axis_z_max), z_range);
           }
           std::string axis_with_largest_range;
           float min, max;
+          float max_range_found = 0;
           if (x_range > min_axis_range && x_range > y_range && x_range > z_range) {
             axis_with_largest_range = "x";
             min = id(${prefix_id}calibrating_axis_x_min);
             max = id(${prefix_id}calibrating_axis_x_max);
+            max_range_found = x_range;
           } else if (y_range > min_axis_range && y_range > x_range && y_range > z_range) {
             axis_with_largest_range = "y";
             min = id(${prefix_id}calibrating_axis_y_min);
             max = id(${prefix_id}calibrating_axis_y_max);
+            max_range_found = y_range;
           } else if (z_range > min_axis_range && z_range > x_range && z_range > y_range) {
             axis_with_largest_range = "z";
             min = id(${prefix_id}calibrating_axis_z_min);
             max = id(${prefix_id}calibrating_axis_z_max);
+            max_range_found = z_range;
           } else {
             ESP_LOGE("${prefix_id}calibration", "Calibration failed. No axis had a range of at least %.0f", min_axis_range);
             return;
           }
+
+          id(${prefix_id}axis).make_call().set_option(axis_with_largest_range).perform();
+
+          // Set magnet span for adaptive algorithm
+          id(${prefix_id}magnet_span).make_call().set_value(roundf(max_range_found * 10) / 10).perform();
+          id(${prefix_id}track_max) = NAN;
+          id(${prefix_id}track_min) = NAN;
+
+          // Set thresholds for threshold-based algorithm
           float tolerance = 5 / (20.0 / min_axis_range);
           float lower_threshold = min + (max - min) / 2 - tolerance;
           float upper_threshold = min + (max - min) / 2 + tolerance;
-          ESP_LOGI("${prefix_id}calibration", "Selected %s axis with lower threshold: %.2f and upper threshold: %.2f",
-                   axis_with_largest_range.c_str(), lower_threshold, upper_threshold);
-          id(${prefix_id}axis).make_call().set_option(axis_with_largest_range).perform();
           id(${prefix_id}threshold_lower).make_call().set_value(roundf(lower_threshold * 10) / 10).perform();
           id(${prefix_id}threshold_upper).make_call().set_value(roundf(upper_threshold * 10) / 10).perform();
+
+          ESP_LOGI("${prefix_id}calibration", "Calibration complete: axis=%s, span=%.2f, thresholds=[%.1f, %.1f]",
+                   axis_with_largest_range.c_str(), max_range_found, lower_threshold, upper_threshold);
 
 i2c:
   - id: ${prefix_id}i2c_bus
@@ -286,6 +353,51 @@ sensor:
     on_raw_value:
       then:
         - lambda: |-
+            if (strcmp("Adaptive", id(${prefix_id}detection_algorithm).current_option()) == 0) {
+              // === ADAPTIVE ALGORITHM: Min/Max Tracker with Minimum Span Enforcement ===
+
+              // 1. Initialize Trackers if empty (NAN on boot or after calibration)
+              if (std::isnan(id(${prefix_id}track_max)) || std::isnan(id(${prefix_id}track_min))) {
+                 id(${prefix_id}track_max) = x + (id(${prefix_id}magnet_span).state / 2.0);
+                 id(${prefix_id}track_min) = x - (id(${prefix_id}magnet_span).state / 2.0);
+              }
+
+              // 2. Linear Decay (Very Slow) - pulls max down and min up to follow thermal drift
+              float decay = ${tracker_decay_rate};
+              id(${prefix_id}track_max) -= decay;
+              id(${prefix_id}track_min) += decay;
+
+              // 3. Expand Trackers based on current signal
+              if (x > id(${prefix_id}track_max)) id(${prefix_id}track_max) = x;
+              if (x < id(${prefix_id}track_min)) id(${prefix_id}track_min) = x;
+
+              // 4. Enforce Minimum Span - prevents window from collapsing when flow stops
+              float min_span = id(${prefix_id}magnet_span).state * ${min_span_multiplier};
+              float current_span = id(${prefix_id}track_max) - id(${prefix_id}track_min);
+
+              if (current_span < min_span) {
+                 float correction = (min_span - current_span) / 2.0;
+                 id(${prefix_id}track_max) += correction;
+                 id(${prefix_id}track_min) -= correction;
+              }
+
+              // 5. Calculate Center and Hysteresis (25% of window size)
+              float midpoint = (id(${prefix_id}track_max) + id(${prefix_id}track_min)) / 2.0;
+              float hyst = (id(${prefix_id}track_max) - id(${prefix_id}track_min)) * 0.25;
+
+              // 6. Trigger Logic
+              if (x > (midpoint + hyst) && !id(${prefix_id}axis_value_high)) {
+                id(${prefix_id}axis_value_high) = true;
+                id(${prefix_id}half_rotations_total) += 1;
+                id(${prefix_id}half_rotations_flow) += 1;
+                id(led).turn_on();
+              } else if (x < (midpoint - hyst) && id(${prefix_id}axis_value_high)) {
+                id(${prefix_id}axis_value_high) = false;
+                id(led).turn_off();
+              }
+              return;
+            }
+            // === THRESHOLD ALGORITHM: Fixed thresholds ===
             if (x > id(${prefix_id}threshold_upper).state && !id(${prefix_id}axis_value_high)) {
               id(${prefix_id}axis_value_high) = true;
               id(${prefix_id}half_rotations_total) += 1;
@@ -361,6 +473,32 @@ sensor:
             - delta: 0.5
     oversampling: ${qmc5883l_oversampling}
     update_interval: ${qmc5883l_update_interval}
+
+  - platform: template
+    id: ${prefix_id}sensor_track_min
+    name: ${prefix_name}Track Min
+    lambda: return id(${prefix_id}track_min);
+    update_interval: 1s
+    internal: ${hide_magnetic_field_strength_sensors}
+    entity_category: diagnostic
+    accuracy_decimals: 1
+    unit_of_measurement: µT
+    icon: mdi:arrow-collapse-down
+    filters:
+      - delta: ${magnetic_field_update_delta}
+
+  - platform: template
+    id: ${prefix_id}sensor_track_max
+    name: ${prefix_name}Track Max
+    lambda: return id(${prefix_id}track_max);
+    update_interval: 1s
+    internal: ${hide_magnetic_field_strength_sensors}
+    entity_category: diagnostic
+    accuracy_decimals: 1
+    unit_of_measurement: µT
+    icon: mdi:arrow-collapse-up
+    filters:
+      - delta: ${magnetic_field_update_delta}
 
   - platform: template
     id: ${prefix_id}sensor_half_rotations_total

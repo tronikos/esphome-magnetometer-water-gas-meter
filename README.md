@@ -228,25 +228,44 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
 
 ## Calibration
 
-### Magnetic field axis and thresholds
+### Detection Algorithm
 
-To calibrate these just run a light stream of water/gas and press the "Calibrate axis" button. After 5 seconds (configurable) the proper axis and thresholds should be set.
-If not, check the device logs. You might have to lower the "Calibration minimal axis range".
+Two detection algorithms are available, controlled by the **"Detection algorithm"** select:
 
-Alternatively:
+Algorithm | Best For
+--- | ---
+**Threshold** (default) | Backward compatibility with existing installations
+**Adaptive** | **Recommended for new users**. Handles temperature drift automatically
 
-1. Temporarily set `hide_magnetic_field_strength_sensors: 'false'` to show the Magnetic Field Strength X, Y, and Z sensors in HA.
-2. Run a light stream of water/gas.
-3. Observe which axis changes the most and its range.
-4. Set the axis and thresholds. e.g. if y axis ranges from min to max use:
+> **Recommendation:** New users should select the Adaptive algorithm. Threshold is the default only for backward compatibility with existing installations.
 
-    ```raw
-    Axis = y
-    Threshold lower = min + 0.25 * (max - min)
-    Threshold upper = max - 0.25 * (max - min)
-    ```
+**Threshold algorithm**:
 
-5. Set `hide_magnetic_field_strength_sensors: 'true'`.
+- Uses fixed upper/lower thresholds set during calibration
+- Simple and reliable in stable temperature environments
+- May require recalibration if temperature drift moves the baseline outside thresholds
+
+**Adaptive algorithm**:
+
+- Automatically tracks and adapts to thermal drift
+- No recalibration needed when temperature changes
+- Uses a "Smart Min/Max Tracker" with frozen window enforcement
+
+### Running Calibration
+
+1. Run a light stream of water/gas.
+2. Press the "**Calibrate axis**" button in Home Assistant.
+3. Wait for calibration to complete (default 5 seconds, configurable).
+
+The system will automatically:
+
+- Detect the axis with the strongest signal
+- Set `Threshold lower` and `Threshold upper` (for threshold mode)
+- Set `Magnet Span` (for adaptive mode)
+
+You can switch between algorithms at any time without recalibrating.
+
+If calibration fails, check the device logs. You might need to lower "Calibration minimal axis range".
 
 ### Volume per half rotation
 
