@@ -31,7 +31,7 @@ packages:
     refresh: 0s
 ```
 
-<img src="https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/9363747e-ea4d-457b-b219-90f0192fcf8d" alt="Water meter in Home Assistant" width=40%>
+<img src="https://github.com/user-attachments/assets/eec2ee3b-b133-458f-bf28-de8dc780e3d4" alt="Water meter in Home Assistant" width=40%>
 
 ## Compatibility
 
