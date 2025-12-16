@@ -34,7 +34,7 @@ substitutions:
   hide_half_rotations_total_sensor: 'true'
 
 esphome:
-  min_version: "2024.4.0"  # This version includes https://github.com/esphome/esphome/pull/6456
+  min_version: "2025.11.0"
   # Default loop interval is 16ms. Setting it to 0 to make updates faster.
   # Without setting this, the actual update interval of qmc5883l is: 6ms on ESP32, 10ms on ESP8266.
   # With this, it's 5ms on ESP32, 8ms on ESP8266.
@@ -305,8 +305,8 @@ sensor:
       entity_category: diagnostic
       on_raw_value:
         then:
-          - lambda:
-              if (id(${prefix_id}axis).state == "x") id(${prefix_id}axis_value).publish_state(x);
+          - lambda: |-
+              if (strcmp("x", id(${prefix_id}axis).current_option()) == 0) id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_x_min) = min(id(${prefix_id}calibrating_axis_x_min), x);
                 id(${prefix_id}calibrating_axis_x_max) = max(id(${prefix_id}calibrating_axis_x_max), x);
@@ -321,7 +321,7 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
-              if (id(${prefix_id}axis).state == "y") id(${prefix_id}axis_value).publish_state(x);
+              if (strcmp("y", id(${prefix_id}axis).current_option()) == 0) id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_y_min) = min(id(${prefix_id}calibrating_axis_y_min), x);
                 id(${prefix_id}calibrating_axis_y_max) = max(id(${prefix_id}calibrating_axis_y_max), x);
@@ -335,8 +335,8 @@ sensor:
       entity_category: diagnostic
       on_raw_value:
         then:
-          - lambda:
-              if (id(${prefix_id}axis).state == "z") id(${prefix_id}axis_value).publish_state(x);
+          - lambda: |-
+              if (strcmp("z", id(${prefix_id}axis).current_option()) == 0) id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_z_min) = min(id(${prefix_id}calibrating_axis_z_min), x);
                 id(${prefix_id}calibrating_axis_z_max) = max(id(${prefix_id}calibrating_axis_z_max), x);
