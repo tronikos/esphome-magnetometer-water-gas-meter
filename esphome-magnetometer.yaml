@@ -109,6 +109,7 @@ number:
     restore_value: true
     optimistic: true
     unit_of_measurement: ${volume_unit}
+    icon: mdi:rotate-360
 
   - platform: template
     id: ${prefix_id}temperature_offset
@@ -138,6 +139,7 @@ number:
     restore_value: true
     optimistic: true
     unit_of_measurement: µT
+    icon: mdi:arrow-collapse-down
 
   - platform: template
     id: ${prefix_id}threshold_upper
@@ -152,6 +154,7 @@ number:
     restore_value: true
     optimistic: true
     unit_of_measurement: µT
+    icon: mdi:arrow-collapse-up
 
   - platform: template
     id: ${prefix_id}calibration_minimal_axis_range
@@ -188,6 +191,7 @@ select:
     id: ${prefix_id}axis
     name: ${prefix_name}Axis
     entity_category: config
+    icon: mdi:axis-arrow
     options:
       - x
       - y
@@ -203,6 +207,7 @@ button:
     id: ${prefix_id}calibrate_button
     name: ${prefix_name}Calibrate axis
     entity_category: config
+    icon: mdi:tune
     on_press:
       - lambda: |-
           ESP_LOGI("calibration", "Starting calibration. Make sure ${device_class} is running");
@@ -388,6 +393,7 @@ sensor:
   - platform: template
     id: ${prefix_id}sensor_flow
     name: ${prefix_name}Flow
+    icon: mdi:speedometer
     lambda: |-
       float flow = id(${prefix_id}half_rotations_flow) * id(${prefix_id}volume_per_half_rotation).state * 60.0 / ${flow_update_interval_seconds};
       id(${prefix_id}half_rotations_flow) = 0;
