@@ -11,6 +11,7 @@ substitutions:
   volume_per_half_rotation_initial_value: '0.125'
   calibration_minimal_axis_range_initial_value: '15'
   flow_update_interval_seconds: '30'
+  magnetic_field_update_delta: '1'
 
 packages:
   gas_meter: !include

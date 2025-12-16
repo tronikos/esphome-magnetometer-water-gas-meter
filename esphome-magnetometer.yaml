@@ -26,6 +26,10 @@ substitutions:
   calibration_minimal_axis_range_initial_value: '20'
   flow_update_interval_seconds: '10'
 
+  # Only publish updates if the magnetic field changes by at least this amount (in µT).
+  # Reduces Wi-Fi traffic and Home Assistant database growth.
+  magnetic_field_update_delta: '3'
+
   hide_magnetic_field_strength_sensors: 'true'
   hide_half_rotations_total_sensor: 'true'
 
@@ -287,7 +291,7 @@ sensor:
               id(led).turn_off();
             }
     filters:
-      - delta: 3
+      - delta: ${magnetic_field_update_delta}
 
   # https://esphome.io/components/sensor/qmc5883l.html
   - platform: qmc5883l
@@ -308,7 +312,7 @@ sensor:
                 id(${prefix_id}calibrating_axis_x_max) = max(id(${prefix_id}calibrating_axis_x_max), x);
               }
       filters:
-        - delta: 3
+        - delta: ${magnetic_field_update_delta}
     field_strength_y:
       id: ${prefix_id}qmc5883l_axis_y
       name: ${prefix_name}Magnetic Field Strength Y
@@ -323,7 +327,7 @@ sensor:
                 id(${prefix_id}calibrating_axis_y_max) = max(id(${prefix_id}calibrating_axis_y_max), x);
               }
       filters:
-        - delta: 3
+        - delta: ${magnetic_field_update_delta}
     field_strength_z:
       id: ${prefix_id}qmc5883l_axis_z
       name: ${prefix_name}Magnetic Field Strength Z
@@ -338,7 +342,7 @@ sensor:
                 id(${prefix_id}calibrating_axis_z_max) = max(id(${prefix_id}calibrating_axis_z_max), x);
               }
       filters:
-        - delta: 3
+        - delta: ${magnetic_field_update_delta}
     temperature:
       id: ${prefix_id}qmc5883l_temperature
       name: ${prefix_name}Temperature
