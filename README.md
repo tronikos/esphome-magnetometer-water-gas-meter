@@ -249,7 +249,7 @@ Algorithm | Best For
 
 - Automatically tracks and adapts to thermal drift
 - No recalibration needed when temperature changes
-- Uses a "Smart Min/Max Tracker" with frozen window enforcement
+- Uses a "Smart Min/Max Tracker" with window clamping and auto-centering
 
 ### Running Calibration
 

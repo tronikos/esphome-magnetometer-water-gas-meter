@@ -34,17 +34,18 @@ substitutions:
   hide_half_rotations_total_sensor: 'true'
 
   # Tuning parameters for the Min/Max Tracker algorithm:
-  # The algorithm can detect arbitrarily slow leaks - the only limit is the volume
-  # per half-rotation. These parameters control drift adaptation:
-  #
   # Decay rate per tick (~5ms). Controls how fast the tracker follows thermal drift.
   # 0.0005 = ~6 µT/min. Increase if you see false triggers from temperature changes.
   tracker_decay_rate: '0.0005'
   # Minimum span as fraction of calibrated magnet_span. Keeps the detection window
   # open when flow stops, ensuring slow leaks are still detected.
-  # 0.8 = window stays at 80% of calibrated size. Lower = tighter window, more
-  # resistant to noise but may miss weak magnet signals near threshold edges.
+  # 0.8 = window stays at 80% of calibrated size.
   min_span_multiplier: '0.8'
+  # Maximum span as fraction of calibrated magnet_span.
+  # If the calculated span exceeds this (e.g., due to bad initialization or huge signal jump),
+  # the opposite tracker is dragged along to maintain the maximum allowed size.
+  # 1.1 = Max allowed window is 120% of calibrated size.
+  max_span_multiplier: '1.2'
 
 esphome:
   min_version: "2025.11.0"
@@ -354,7 +355,7 @@ sensor:
       then:
         - lambda: |-
             if (strcmp("Adaptive", id(${prefix_id}detection_algorithm).current_option()) == 0) {
-              // === ADAPTIVE ALGORITHM: Min/Max Tracker with Minimum Span Enforcement ===
+              // === ADAPTIVE ALGORITHM: Min/Max Tracker with Range Clamping ===
 
               // 1. Initialize Trackers if empty (NAN on boot or after calibration)
               if (std::isnan(id(${prefix_id}track_max)) || std::isnan(id(${prefix_id}track_min))) {
@@ -367,9 +368,23 @@ sensor:
               id(${prefix_id}track_max) -= decay;
               id(${prefix_id}track_min) += decay;
 
-              // 3. Expand Trackers based on current signal
-              if (x > id(${prefix_id}track_max)) id(${prefix_id}track_max) = x;
-              if (x < id(${prefix_id}track_min)) id(${prefix_id}track_min) = x;
+              // 3. Expand Trackers based on current signal AND Clamp Span
+              float max_allowed_span = id(${prefix_id}magnet_span).state * ${max_span_multiplier};
+
+              if (x > id(${prefix_id}track_max)) {
+                id(${prefix_id}track_max) = x;
+                // If expanding Max makes the window too huge, drag Min up
+                if ((id(${prefix_id}track_max) - id(${prefix_id}track_min)) > max_allowed_span) {
+                   id(${prefix_id}track_min) = id(${prefix_id}track_max) - max_allowed_span;
+                }
+              }
+              if (x < id(${prefix_id}track_min)) {
+                id(${prefix_id}track_min) = x;
+                // If expanding Min makes the window too huge, drag Max down
+                if ((id(${prefix_id}track_max) - id(${prefix_id}track_min)) > max_allowed_span) {
+                   id(${prefix_id}track_max) = id(${prefix_id}track_min) + max_allowed_span;
+                }
+              }
 
               // 4. Enforce Minimum Span - prevents window from collapsing when flow stops
               float min_span = id(${prefix_id}magnet_span).state * ${min_span_multiplier};
