@@ -234,22 +234,22 @@ Two detection algorithms are available, controlled by the **"Detection algorithm
 
 Algorithm | Best For
 --- | ---
-**Threshold** (default) | Backward compatibility with existing installations
-**Adaptive** | **Recommended for new users**. Handles temperature drift automatically
+**Adaptive** (default) | **Recommended**. Handles temperature drift automatically
+**Threshold** | Backward compatibility with existing installations
 
-> **Recommendation:** New users should select the Adaptive algorithm. Threshold is the default only for backward compatibility with existing installations.
-
-**Threshold algorithm**:
-
-- Uses fixed upper/lower thresholds set during calibration
-- Simple and reliable in stable temperature environments
-- May require recalibration if temperature drift moves the baseline outside thresholds
+> **Recommendation:** Use the Adaptive algorithm. Threshold is available for backward compatibility with existing installations.
 
 **Adaptive algorithm**:
 
 - Automatically tracks and adapts to thermal drift
 - No recalibration needed when temperature changes
 - Uses a "Smart Min/Max Tracker" with window clamping and auto-centering
+
+**Threshold algorithm**:
+
+- Uses fixed upper/lower thresholds set during calibration
+- Simple and reliable in stable temperature environments
+- May require recalibration if temperature drift moves the baseline outside thresholds
 
 ### Running Calibration
 

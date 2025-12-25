@@ -249,9 +249,9 @@ select:
     entity_category: config
     icon: mdi:auto-fix
     options:
-      - Threshold
       - Adaptive
-    initial_option: Threshold
+      - Threshold
+    initial_option: Adaptive
     update_interval: never
     restore_value: true
     optimistic: true
