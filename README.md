@@ -59,6 +59,8 @@ converted to any engineering unit of measure for totalization, indication or pro
 
 ### Gas meter
 
+> **⚠️ Safety Disclaimer:** Placing DIY electronics near gas infrastructure carries inherent risks. Ensure you are compliant with local regulations and are personally comfortable with the safety implications before proceeding. Use at your own risk.
+
 The magnetometer is used to read the diaphragm that expands and contracts inside your gas meter.
 
 This should be compatible with all diaphragm/bellows meters which are the most common type of gas meter, seen in almost all residential and small commercial installations.
@@ -99,11 +101,12 @@ To verify compatibility install the Sensors app on your phone, place your phone 
 
 QMC5883L | ESP8266
 --- | ---
-VCC | 5V
+VCC | 3.3V
 GND | GND
 SCL | D1
 SDA | D2
 
+If your magnetometer module has its own 3.3V regulator you can connect the sensor's VCC to 5V.
 The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for the 4 above pins. Tie the 4 white wires together with the GND solid wire. You might need to use a header pin for the GND. If you use a header pin cut the 5 GND wires shorter to avoid the ball of wires I had...
 
 ![magnetometer wiring](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/assets/9987465/c7052171-eee1-44cb-90f4-76cad4e46334)
