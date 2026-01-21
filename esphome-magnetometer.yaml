@@ -437,8 +437,8 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
-              auto axis = id(${prefix_id}axis).current_option();
-              if (axis == "x") id(${prefix_id}axis_value).publish_state(x);
+              auto axis_opt = id(${prefix_id}axis).current_option();
+              if (axis_opt == "x") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_x_min) = min(id(${prefix_id}calibrating_axis_x_min), x);
                 id(${prefix_id}calibrating_axis_x_max) = max(id(${prefix_id}calibrating_axis_x_max), x);
@@ -453,8 +453,8 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
-              auto axis = id(${prefix_id}axis).current_option();
-              if (axis == "y") id(${prefix_id}axis_value).publish_state(x);
+              auto axis_opt = id(${prefix_id}axis).current_option();
+              if (axis_opt == "y") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_y_min) = min(id(${prefix_id}calibrating_axis_y_min), x);
                 id(${prefix_id}calibrating_axis_y_max) = max(id(${prefix_id}calibrating_axis_y_max), x);
@@ -469,8 +469,8 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
-              auto axis = id(${prefix_id}axis).current_option();
-              if (axis == "z") id(${prefix_id}axis_value).publish_state(x);
+              auto axis_opt = id(${prefix_id}axis).current_option();
+              if (axis_opt == "z") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_z_min) = min(id(${prefix_id}calibrating_axis_z_min), x);
                 id(${prefix_id}calibrating_axis_z_max) = max(id(${prefix_id}calibrating_axis_z_max), x);
