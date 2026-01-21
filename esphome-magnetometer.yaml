@@ -354,7 +354,7 @@ sensor:
     on_value:
       then:
         - lambda: |-
-            if (strcmp("Adaptive", id(${prefix_id}detection_algorithm).current_option()) == 0) {
+            if (id(${prefix_id}detection_algorithm).state == "Adaptive") {
               // === ADAPTIVE ALGORITHM: Min/Max Tracker with Range Clamping ===
 
               // 1. Initialize Trackers if empty (NAN on boot or after calibration)
@@ -436,7 +436,7 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
-              if (strcmp("x", id(${prefix_id}axis).current_option()) == 0) id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}axis).state == "x") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_x_min) = min(id(${prefix_id}calibrating_axis_x_min), x);
                 id(${prefix_id}calibrating_axis_x_max) = max(id(${prefix_id}calibrating_axis_x_max), x);
@@ -451,7 +451,7 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
-              if (strcmp("y", id(${prefix_id}axis).current_option()) == 0) id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}axis).state == "y") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_y_min) = min(id(${prefix_id}calibrating_axis_y_min), x);
                 id(${prefix_id}calibrating_axis_y_max) = max(id(${prefix_id}calibrating_axis_y_max), x);
@@ -466,7 +466,7 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
-              if (strcmp("z", id(${prefix_id}axis).current_option()) == 0) id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}axis).state == "z") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_z_min) = min(id(${prefix_id}calibrating_axis_z_min), x);
                 id(${prefix_id}calibrating_axis_z_max) = max(id(${prefix_id}calibrating_axis_z_max), x);
