@@ -10,7 +10,7 @@ substitutions:
 
   # For water one of: CCF, ft³, gal, L, m³
   # For gas one of: CCF, ft³, m³
-  volume_unit: 'gal'
+  volume_unit: 'L'
 
   i2c_scl: GPIO5  # D1
   i2c_sda: GPIO4  # D2
@@ -22,7 +22,7 @@ substitutions:
   qmc5883l_update_interval: '5ms'
   qmc5883l_oversampling: '64x'
 
-  volume_per_half_rotation_initial_value: '0.01008156'
+  volume_per_half_rotation_initial_value: '0.05'
   calibration_minimal_axis_range_initial_value: '20'
   flow_update_interval_seconds: '10'
 
