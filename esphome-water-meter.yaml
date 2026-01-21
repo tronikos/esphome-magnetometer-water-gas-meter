@@ -1,6 +1,6 @@
 ---
 substitutions:
-  gpio_led: GPIO2
+  gpio_led: GPIO7
   # For water one of: CCF, ft³, gal, L, m³
   # For better accuracy avoid using large units like CCF and m³.
   # You can always change the unit later in Home Assistant.
@@ -13,10 +13,10 @@ packages:
       device_class: 'water'
       device_icon: 'mdi:water'
 
-switch:
+#switch:
   # LED flashes faster/slower as magnet rotates on water meter
-  - platform: gpio
-    id: led
-    pin:
-      number: ${gpio_led}
-      inverted: true
+ # - platform: gpio
+  #  id: led
+   # pin:
+    #  number: ${gpio_led}
+     # inverted: true
