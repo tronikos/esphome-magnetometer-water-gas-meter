@@ -48,7 +48,7 @@ substitutions:
   max_span_multiplier: '1.2'
 
 esphome:
-  min_version: "2025.11.0"
+  min_version: "2026.1.0"
   # Default loop interval is 16ms. Setting it to 0 to make updates faster.
   # Without setting this, the actual update interval of qmc5883l is: 6ms on ESP32, 10ms on ESP8266.
   # With this, it's 5ms on ESP32, 8ms on ESP8266.
