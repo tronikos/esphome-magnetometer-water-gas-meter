@@ -242,6 +242,14 @@ select:
     update_interval: never
     restore_value: true
     optimistic: true
+    on_value:
+      then:
+        - lambda: |-
+            if (x == "None") {
+              id(${prefix_id}calibration_status).publish_state("Not Calibrated");
+            } else if (!id(${prefix_id}calibrating)) {
+              id(${prefix_id}calibration_status).publish_state("Ready");
+            }
 
   - platform: template
     id: ${prefix_id}detection_algorithm
@@ -256,6 +264,14 @@ select:
     restore_value: true
     optimistic: true
 
+text_sensor:
+  - platform: template
+    id: ${prefix_id}calibration_status
+    name: ${prefix_name}Calibration Status
+    entity_category: diagnostic
+    icon: mdi:information-outline
+    update_interval: never
+
 button:
   - platform: template
     id: ${prefix_id}calibrate_button
@@ -265,6 +281,7 @@ button:
     on_press:
       - lambda: |-
           ESP_LOGI("calibration", "Starting calibration. Make sure ${device_class} is running");
+          id(${prefix_id}calibration_status).publish_state("Calibrating...");
           id(${prefix_id}calibrating_axis_x_min) = std::numeric_limits<float>::max();
           id(${prefix_id}calibrating_axis_x_max) = std::numeric_limits<float>::lowest();
           id(${prefix_id}calibrating_axis_y_min) = std::numeric_limits<float>::max();
@@ -318,6 +335,7 @@ button:
             max_range_found = z_range;
           } else {
             ESP_LOGE("${prefix_id}calibration", "Calibration failed. No axis had a range of at least %.0f", min_axis_range);
+            id(${prefix_id}calibration_status).publish_state("Failed: low signal");
             return;
           }
 
