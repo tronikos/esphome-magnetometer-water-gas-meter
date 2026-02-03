@@ -544,6 +544,59 @@ WHERE rank_num = 1
 ORDER BY run_day DESC;
 ```
 
+### Slow Leak Detection Automation
+
+This automation runs every 30 minutes and checks if there was any water usage in the last hour without the flow rate ever exceeding a low threshold (e.g., 0.1 gal/min). This is useful for detecting very slow leaks that don't trigger a continuous flow alert but still consume water over time.
+
+```yaml
+alias: "Notify: Slow Water Leak"
+description: Detects if water volume increased while flow rate remained low.
+triggers:
+  - trigger: time_pattern
+    minutes: /30
+actions:
+  - action: sql.query
+    data:
+      query: |-
+        SELECT 
+          (
+            SELECT MAX("sum") - MIN("sum")
+            FROM statistics_short_term s
+            JOIN statistics_meta m ON s.metadata_id = m.id
+            WHERE m.statistic_id = 'sensor.water_meter_total'
+            AND s.start_ts >= strftime('%s', 'now') - 3600
+          ) AS volume_delta,
+          (
+            SELECT MAX("max")
+            FROM statistics_short_term s
+            JOIN statistics_meta m ON s.metadata_id = m.id
+            WHERE m.statistic_id = 'sensor.water_meter_flow'
+            AND s.start_ts >= strftime('%s', 'now') - 3600
+          ) AS max_flow_rate
+    response_variable: sql_result
+  - if:
+      - condition: template
+        value_template: |-
+          {% set row = sql_result['result'][0] %}
+          {{ 
+             row['volume_delta'] is not none and 
+             row['volume_delta'] > 0.015 and 
+             (row['max_flow_rate'] is none or row['max_flow_rate'] < 0.1)
+          }}
+    then:
+      - action: notify.nikos
+        data:
+          title: 💧 Slow Leak Detected
+          message: >-
+            {% set row = sql_result['result'][0] %} Usage in last hour: {{
+            row['volume_delta'] | round(3) }} gal. Max Flow Rate observed: {{
+            row['max_flow_rate'] | round(3) }} gal/min.
+
+            This indicates a leak of approx {{ (row['volume_delta'] / 60) |
+            round(4) }} gal/min.
+mode: single
+```
+
 ### Daily Usage Alert
 
 This automation checks your total consumption at the end of the day and notifies you if it's unusually high (possible leak) or low (possible sensor issue).
