@@ -562,6 +562,7 @@ sensor:
   - platform: template
     id: ${prefix_id}sensor_flow
     name: ${prefix_name}Flow
+    device_class: volume_flow_rate
     icon: mdi:speedometer
     lambda: |-
       float flow = id(${prefix_id}half_rotations_flow) * id(${prefix_id}volume_per_half_rotation).state * 60.0 / ${flow_update_interval_seconds};
