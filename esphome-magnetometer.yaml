@@ -276,6 +276,16 @@ text_sensor:
 
 button:
   - platform: template
+    name: "Reset Meter Values"
+    id: reset_gas_meter_total
+    entity_category: diagnostic
+    icon: "mdi:restart"
+    on_press:
+      then:
+        - lambda: |-
+            id(${prefix_id}half_rotations_total) = 0;
+            id(${prefix_id}sensor_total).publish_state(0);
+  - platform: template
     id: ${prefix_id}calibrate_button
     name: ${prefix_name}Calibrate axis
     entity_category: config
