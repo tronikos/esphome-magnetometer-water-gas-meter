@@ -276,9 +276,10 @@ text_sensor:
 
 button:
   - platform: template
-    name: "Reset Meter Values"
-    id: reset_gas_meter_total
-    entity_category: diagnostic
+    name: "${prefix_name}Reset Meter Values"
+    id: ${prefix_id}reset_meter_values
+    disabled_by_default: true
+    entity_category: config
     icon: "mdi:restart"
     on_press:
       then:
