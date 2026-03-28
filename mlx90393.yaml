@@ -1,0 +1,63 @@
+---
+logger:
+  logs:
+    mlx90393: INFO
+number:
+  - id: !remove ${prefix_id}temperature_offset
+sensor:
+  - id: !extend ${prefix_id}qmc5883l_id
+    platform: mlx90393
+    oversampling: 1
+    filter: 5
+    temperature: !remove ${prefix_id}qmc5883l_temperature
+    field_strength_z: !remove ${prefix_id}qmc5883l_axis_z
+    field_strength_y: !remove ${prefix_id}qmc5883l_axis_y
+    field_strength_x: !remove ${prefix_id}qmc5883l_axis_x
+    x_axis:
+      id: ${prefix_id}qmc5883l_axis_x
+      name: ${prefix_name}Magnetic Field Strength X
+      internal: ${hide_magnetic_field_strength_sensors}
+      entity_category: diagnostic
+      resolution: DIV_8
+      on_raw_value:
+        then:
+          - lambda: |-
+              if (id(${prefix_id}axis).current_option() == "x") id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}calibrating)) {
+                id(${prefix_id}calibrating_axis_x_min) = min(id(${prefix_id}calibrating_axis_x_min), x);
+                id(${prefix_id}calibrating_axis_x_max) = max(id(${prefix_id}calibrating_axis_x_max), x);
+              }
+      filters:
+        - delta: ${magnetic_field_update_delta}
+    y_axis:
+      id: ${prefix_id}qmc5883l_axis_y
+      name: ${prefix_name}Magnetic Field Strength Y
+      internal: ${hide_magnetic_field_strength_sensors}
+      entity_category: diagnostic
+      resolution: DIV_8
+      on_raw_value:
+        then:
+          - lambda: |-
+              if (id(${prefix_id}axis).current_option() == "y") id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}calibrating)) {
+                id(${prefix_id}calibrating_axis_y_min) = min(id(${prefix_id}calibrating_axis_y_min), x);
+                id(${prefix_id}calibrating_axis_y_max) = max(id(${prefix_id}calibrating_axis_y_max), x);
+              }
+      filters:
+        - delta: ${magnetic_field_update_delta}
+    z_axis:
+      id: ${prefix_id}qmc5883l_axis_z
+      name: ${prefix_name}Magnetic Field Strength Z
+      internal: ${hide_magnetic_field_strength_sensors}
+      entity_category: diagnostic
+      resolution: DIV_8
+      on_raw_value:
+        then:
+          - lambda: |-
+              if (id(${prefix_id}axis).current_option() == "z") id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}calibrating)) {
+                id(${prefix_id}calibrating_axis_z_min) = min(id(${prefix_id}calibrating_axis_z_min), x);
+                id(${prefix_id}calibrating_axis_z_max) = max(id(${prefix_id}calibrating_axis_z_max), x);
+              }
+      filters:
+        - delta: ${magnetic_field_update_delta}

@@ -1,6 +1,6 @@
 # esphome-magnetometer-water-gas-meter [![Made for ESPHome](https://img.shields.io/badge/Made_for-ESPHome-black?logo=esphome)](https://esphome.io)
 
-This [ESPHome](https://esphome.io) package allows reading your water meter or gas meter using the QMC5883L or QMC5883P or HMC5883L or MMC5603, a triple-axis magnetometer.
+This [ESPHome](https://esphome.io) package allows reading your water meter or gas meter using the QMC5883L or QMC5883P or HMC5883L or MMC5603 or MLX90393, a triple-axis magnetometer.
 
 TLDR; Add this to your ESPHome device configuration:
 
@@ -28,6 +28,8 @@ packages:
     # files: [esphome-water-meter.yaml, hmc5883l.yaml]
     # Or if you are using MMC5603 instead of QMC5883L:
     # files: [esphome-water-meter.yaml, mmc5603.yaml]
+    # Or if you are using MLX90393 instead of QMC5883L:
+    # files: [esphome-water-meter.yaml, mlx90393.yaml]
     refresh: 0s
 ```
 
