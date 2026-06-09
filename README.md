@@ -303,13 +303,14 @@ For water meters this defaults to `0.01008156 gal` which is for my 3/4" Badge Me
 For gas meters this defaults to `0.125 ft³` which seems to be the most common in US.
 If you have modified the `volume_unit` you have to manually convert this value.
 
-### Volume offset
+### Setting Total Volume
 
-If you would like your "Total" reading to match the reading displayed on your physical reading, you might consider setting a "Volume Offset":
-<img width="701" height="667" alt="image" src="https://github.com/user-attachments/assets/870d37a7-ee77-4b65-8869-8ef47f1f7c9d" />
+If you would like your "Total" reading to match the reading displayed on your physical reading, you can use the `set_total` action
 
-1. Set Volume Offset to 0 (if not already set to 0)
-2. Volume Offset = [_Your Actual Meter Reading_] - "Total"
+1. From Home Assistant, navigate to Setting -> Developer Tools -> Actions
+2. Locate the esphome.water_meter_set_total action
+3. Enter the desired total volume you wish your device to report in `new_total`
+4. Click Perform Action
 
 ### Temperature
 

@@ -26,7 +26,6 @@ substitutions:
   qmc5883l_oversampling: '64x'
 
   volume_per_half_rotation_initial_value: '0.01008156'
-  volume_offset_initial_value: '0'
   calibration_minimal_axis_range_initial_value: '20'
   flow_update_interval_seconds: '10'
 
@@ -145,21 +144,6 @@ number:
     optimistic: true
     unit_of_measurement: ${volume_unit}
     icon: mdi:rotate-360
-
-  - platform: template
-    id: ${prefix_id}volume_offset
-    name: ${prefix_name}Volume Offset
-    entity_category: config
-    mode: box
-    min_value: 0
-    max_value: 9999999
-    step: 0.001
-    initial_value: ${volume_offset_initial_value}
-    update_interval: never
-    restore_value: true
-    optimistic: true
-    unit_of_measurement: ${volume_unit}
-    icon: mdi:cup-water
 
   - platform: template
     id: ${prefix_id}temperature_offset
@@ -571,7 +555,7 @@ sensor:
   - platform: template
     id: ${prefix_id}sensor_total
     name: ${prefix_name}Total
-    lambda: return id(${prefix_id}half_rotations_total) * id(${prefix_id}volume_per_half_rotation).state + id(${prefix_id}volume_offset).state;
+    lambda: return id(${prefix_id}half_rotations_total) * id(${prefix_id}volume_per_half_rotation).state;
     update_interval: 10s
     accuracy_decimals: 2
     device_class: ${device_class}
