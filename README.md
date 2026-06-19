@@ -295,6 +295,15 @@ For water meters this defaults to `0.01008156 gal` which is for my 3/4" Badge Me
 For gas meters this defaults to `0.125 ft³` which seems to be the most common in US.
 If you have modified the `volume_unit` you have to manually convert this value.
 
+### Setting Total Volume
+
+If you would like your "Total" reading to match the reading displayed on your physical reading, you can use the `set_total` action.
+
+1. From Home Assistant, navigate to **Settings** > **Developer Tools** > **Actions**.
+2. Locate the `esphome.water_meter_set_total` action.
+3. Enter the desired total volume you wish your device to report in the `new_total` field.
+4. Click **Perform Action**.
+
 ### Temperature
 
 Only supported if you are using a QMC5883L.
@@ -646,10 +655,12 @@ mode: single
 
 ## Troubleshooting
 
-- **No data from sensors:**
+- **No data from sensors or connection instability:**
   - Double-check your wiring. VCC, GND, SCL, and SDA must be correct.
   - Verify the I2C address of your sensor in the ESPHome logs.
   - Your cable might be too long or poor quality. Try a shorter, shielded cable.
+  - If you are experiencing instability with a longer cable, you may consider adding `i2c_frequency: 10kHz` to the substitution in the YAML.
+  - Additionally, you may wish to consider reducing the SCL/SDA pull-up resistors to 1.2kΩ (many devices ship with 4.7kΩ pre-installed). For 3.3V I2C logic, 1kΩ is the minimum.
 - **Inaccurate readings:**
   - Recalibrate! Flow rate and totals depend entirely on correct calibration.
   - Ensure the sensor is mounted securely and hasn't shifted.
