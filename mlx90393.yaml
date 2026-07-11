@@ -1,4 +1,13 @@
 ---
+# NOTE: Adafruit STEMMA QT MLX90393 breakouts shipped since May 2023 default to
+# I2C address 0x18, not the chip's original default of 0x0C, due to a chip
+# substitution (see https://www.adafruit.com/product/4022). If the sensor
+# is found on an i2c bus scan but "Communication failed" / "failed to apply
+# gain" errors follow, override the address:
+#
+#   sensor:
+#     - id: !extend ${prefix_id}qmc5883l_id
+#       address: 0x18
 substitutions:
   axis_x_key: 'x_axis'
   axis_y_key: 'y_axis'
