@@ -57,6 +57,14 @@ substitutions:
   # Flow is reported as zero if no half rotation has been seen for this long.
   # Should comfortably exceed the slowest rotation you expect at minimum flow.
   flow_zero_timeout_seconds: '600'
+  # Calibration must span at least one full magnet rotation to capture the true
+  # min and max. Water meters rotate fast; gas meters can take minutes per
+  # rotation, so the gas package raises this.
+  calibration_seconds_initial_value: '5'
+  # Delta filter on the Half rotations total sensor. The filter passes only when
+  # the change exceeds this, so the default of 1 makes the counter appear to
+  # advance in steps of 2. Set to 0 to see every increment while calibrating.
+  half_rotations_update_delta: '1'
 
 esphome:
   min_version: "2026.1.0"
@@ -240,7 +248,7 @@ number:
     min_value: 1
     max_value: 999
     step: 1
-    initial_value: 5
+    initial_value: ${calibration_seconds_initial_value}
     update_interval: never
     restore_value: true
     optimistic: true
@@ -575,7 +583,7 @@ sensor:
     state_class: 'total_increasing'
     icon: 'mdi:counter'
     filters:
-      - delta: 1
+      - delta: ${half_rotations_update_delta}
 
   - platform: template
     id: ${prefix_id}sensor_total
