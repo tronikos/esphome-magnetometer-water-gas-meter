@@ -5,11 +5,19 @@ substitutions:
   # For better accuracy avoid using large units like CCF.
   # You can always change the unit later in Home Assistant.
   volume_unit: 'ft³'
-  # The most common value in US seems to be 0.125 ft³
-  # If you modify the volume_unit, modify this too,
-  # just search on Google: 0.125 ft³ to CCF (or whatever unit you selected)
+  # This depends on where the magnet sits in your meter, which varies a lot:
+  #  - Bellows/diaphragm coupling: often 0.125 ft³, common on meters with no AMR.
+  #  - Index drive shaft: equals the meter's drive rating. US AMR-equipped meters
+  #    frequently put the magnet here. A "2-foot drive" meter (e.g. Sensus R-275)
+  #    gives 2.0 ft³ per rotation — 16x the old default.
+  # Measure it: note "Half rotations total", time a known volume from the meter's
+  # test dial, then divide. Do not assume.
   volume_per_half_rotation_initial_value: '0.125'
   calibration_minimal_axis_range_initial_value: '15'
+  # Gas meters can take minutes per rotation at low flow. Calibration must span
+  # at least one full rotation or the captured min/max will be a fragment of the
+  # real swing, producing a magnet span that is far too small.
+  calibration_seconds_initial_value: '120'
   flow_update_interval_seconds: '30'
   magnetic_field_update_delta: '1'
 
