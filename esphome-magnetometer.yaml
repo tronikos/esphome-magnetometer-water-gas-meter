@@ -54,6 +54,9 @@ substitutions:
   # the opposite tracker is dragged along to maintain the maximum allowed size.
   # 1.1 = Max allowed window is 120% of calibrated size.
   max_span_multiplier: '1.2'
+  # Flow is reported as zero if no half rotation has been seen for this long.
+  # Should comfortably exceed the slowest rotation you expect at minimum flow.
+  flow_zero_timeout_seconds: '600'
 
 esphome:
   min_version: "2026.1.0"
@@ -88,6 +91,14 @@ globals:
     initial_value: '0'
   - id: ${prefix_id}half_rotations_flow
     type: long
+    restore_value: false
+    initial_value: '0'
+  - id: ${prefix_id}last_half_rotation_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: ${prefix_id}last_interval_ms
+    type: uint32_t
     restore_value: false
     initial_value: '0'
   - id: ${prefix_id}axis_value_high
@@ -431,6 +442,13 @@ sensor:
                 id(${prefix_id}axis_value_high) = true;
                 id(${prefix_id}half_rotations_total) += 1;
                 id(${prefix_id}half_rotations_flow) += 1;
+                {
+                  uint32_t now_ms = millis();
+                  if (id(${prefix_id}last_half_rotation_ms) != 0) {
+                    id(${prefix_id}last_interval_ms) = now_ms - id(${prefix_id}last_half_rotation_ms);
+                  }
+                  id(${prefix_id}last_half_rotation_ms) = now_ms;
+                }
                 id(led).turn_on();
               } else if (x < (midpoint - hyst) && id(${prefix_id}axis_value_high)) {
                 id(${prefix_id}axis_value_high) = false;
@@ -443,6 +461,13 @@ sensor:
               id(${prefix_id}axis_value_high) = true;
               id(${prefix_id}half_rotations_total) += 1;
               id(${prefix_id}half_rotations_flow) += 1;
+              {
+                uint32_t now_ms = millis();
+                if (id(${prefix_id}last_half_rotation_ms) != 0) {
+                  id(${prefix_id}last_interval_ms) = now_ms - id(${prefix_id}last_half_rotation_ms);
+                }
+                id(${prefix_id}last_half_rotation_ms) = now_ms;
+              }
               id(led).turn_on();
             } else if (x < id(${prefix_id}threshold_lower).state && id(${prefix_id}axis_value_high)) {
               id(${prefix_id}axis_value_high) = false;
@@ -573,9 +598,16 @@ sensor:
     device_class: volume_flow_rate
     icon: mdi:speedometer
     lambda: |-
-      float flow = id(${prefix_id}half_rotations_flow) * id(${prefix_id}volume_per_half_rotation).state * 60.0 / ${flow_update_interval_seconds};
+      // Interval-based flow: rate derived from time between half rotations.
+      // Avoids the quantization of counting within a fixed window, which is
+      // coarse on slow meters (one count per window = one discrete flow value).
       id(${prefix_id}half_rotations_flow) = 0;
-      return flow;
+      if (id(${prefix_id}last_interval_ms) == 0) return 0.0;
+      uint32_t elapsed = millis() - id(${prefix_id}last_half_rotation_ms);
+      // Use whichever is longer so flow decays smoothly once rotations stop
+      uint32_t period = std::max(id(${prefix_id}last_interval_ms), elapsed);
+      if (period > ${flow_zero_timeout_seconds} * 1000UL) return 0.0;
+      return id(${prefix_id}volume_per_half_rotation).state * 60000.0 / period;
     update_interval: ${flow_update_interval_seconds}s
     accuracy_decimals: 2
     state_class: measurement
