@@ -292,7 +292,14 @@ Alternatively:
 5. Set `hide_half_rotations_total_sensor: 'true'`.
 
 For water meters this defaults to `0.01008156 gal` which is for my 3/4" Badge Meter Model 35.
-For gas meters this defaults to `0.125 ft³` which seems to be the most common in US.
+For gas meters this defaults to `0.125 ft³` which is common when the magnet couples to the
+bellows/diaphragm drive. However, on many AMR-equipped meters (e.g. Aclara STAR modules) the
+magnet is mounted on the index drive shaft instead, where one rotation equals the meter's
+drive rate — often 1 or 2 ft³. You can identify the drive rate from the small proving/test
+dials on the index: "2 FT" and "1/2 FT" dials indicate a 2-foot drive (2.0 ft³ per rotation),
+while "1 FT" and "1/4 FT" dials indicate a 1-foot drive (1.0 ft³ per rotation). To verify,
+time several revolutions of the smallest proving dial during steady flow and compare against
+the interval between half-rotation counts.
 If you have modified the `volume_unit` you have to manually convert this value.
 
 ### Setting Total Volume
