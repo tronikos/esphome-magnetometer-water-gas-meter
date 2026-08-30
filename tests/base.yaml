@@ -1,0 +1,14 @@
+---
+# Minimal device scaffolding shared by the config-validation tests.
+# Not intended for flashing; see example-esp8266.yaml for a real config.
+esphome:
+  name: test-device
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
+preferences:
+  flash_write_interval: 60min
+logger:
+wifi:
+  ssid: "test-ssid"
+  password: "test-password"

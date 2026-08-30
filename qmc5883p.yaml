@@ -1,6 +1,6 @@
 ---
 external_components:
-  - source: github://mazzhead/esphome-components@main
+  - source: github://mazzhead/esphome-components@ee83bb9d7faadff40c1788309b442fe14cb2ddb6
     components: [qmc5883p]
 
 logger:

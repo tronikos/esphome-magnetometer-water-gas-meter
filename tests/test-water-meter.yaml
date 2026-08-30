@@ -1,0 +1,4 @@
+---
+packages:
+  base: !include base.yaml
+  meter: !include ../esphome-water-meter.yaml

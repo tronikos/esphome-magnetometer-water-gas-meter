@@ -1,0 +1,14 @@
+---
+# ESP32 counterpart to base.yaml.
+esphome:
+  name: test-device-esp32
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+preferences:
+  flash_write_interval: 60min
+logger:
+wifi:
+  ssid: "test-ssid"
+  password: "test-password"

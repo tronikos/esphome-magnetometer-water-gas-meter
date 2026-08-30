@@ -17,6 +17,7 @@ switch:
   # LED flashes faster/slower as magnet rotates on water meter
   - platform: gpio
     id: led
+    restore_mode: ALWAYS_OFF
     pin:
       number: ${gpio_led}
       inverted: true

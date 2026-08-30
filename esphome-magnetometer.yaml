@@ -1,5 +1,10 @@
 ---
 # This config uses the QMC5883L, a triple-axis magnetometer, to read your water meter or gas meter.
+#
+# This package is not standalone: it expects a `switch` with `id: led` to be defined by the
+# including config, so including it directly fails with "Couldn't find ID 'led'". Use
+# esphome-water-meter.yaml, esphome-gas-meter.yaml, or esphome-two-meters.yaml instead.
+# The LED cannot live in here because esphome-two-meters.yaml includes this file twice.
 
 substitutions:
   # water or gas
@@ -42,8 +47,10 @@ substitutions:
   axis_z_key: 'field_strength_z'
 
   # Tuning parameters for the Min/Max Tracker algorithm:
-  # Decay rate per tick (~5ms). Controls how fast the tracker follows thermal drift.
-  # 0.0005 = ~6 µT/min. Increase if you see false triggers from temperature changes.
+  # Decay rate per axis_value update, whose rate is MCU-dependent (see the esphome:
+  # comment below): 5ms on ESP32, 8ms on ESP8266. Controls how fast the tracker
+  # follows thermal drift. 0.0005 = ~6 µT/min on ESP32, ~3.75 µT/min on ESP8266.
+  # Increase if you see false triggers from temperature changes.
   tracker_decay_rate: '0.0005'
   # Minimum span as fraction of calibrated magnet_span. Keeps the detection window
   # open when flow stops, ensuring slow leaks are still detected.
@@ -52,7 +59,7 @@ substitutions:
   # Maximum span as fraction of calibrated magnet_span.
   # If the calculated span exceeds this (e.g., due to bad initialization or huge signal jump),
   # the opposite tracker is dragged along to maintain the maximum allowed size.
-  # 1.1 = Max allowed window is 120% of calibrated size.
+  # 1.2 = Max allowed window is 120% of calibrated size.
   max_span_multiplier: '1.2'
 
 esphome:
@@ -79,7 +86,13 @@ api:
       then:
         - globals.set:
             id: ${prefix_id}half_rotations_total
-            value: !lambda 'return new_total / id(${prefix_id}volume_per_half_rotation).state;'
+            value: !lambda |-
+              float volume = id(${prefix_id}volume_per_half_rotation).state;
+              if (std::isnan(volume) || volume <= 0) {
+                ESP_LOGW("${prefix_id}set_total", "Volume per half rotation is %f, ignoring set_total", volume);
+                return id(${prefix_id}half_rotations_total);
+              }
+              return new_total / volume;
 
 globals:
   - id: ${prefix_id}half_rotations_total
@@ -355,6 +368,7 @@ button:
           id(${prefix_id}track_min) = NAN;
 
           // Set thresholds for threshold-based algorithm
+          // ±5 µT of tolerance, scaled from the reference range of 20 (i.e. min_axis_range / 4).
           float tolerance = 5 / (20.0 / min_axis_range);
           float lower_threshold = min + (max - min) / 2 - tolerance;
           float upper_threshold = min + (max - min) / 2 + tolerance;
@@ -550,7 +564,7 @@ sensor:
     state_class: 'total_increasing'
     icon: 'mdi:counter'
     filters:
-      - delta: 1
+      - delta: 0
 
   - platform: template
     id: ${prefix_id}sensor_total

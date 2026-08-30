@@ -1,0 +1,5 @@
+---
+packages:
+  base: !include base.yaml
+  meter: !include ../esphome-water-meter.yaml
+  sensor: !include ../mmc5603.yaml

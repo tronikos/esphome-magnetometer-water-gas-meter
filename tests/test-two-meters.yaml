@@ -1,0 +1,4 @@
+---
+packages:
+  base: !include base.yaml
+  meters: !include ../esphome-two-meters.yaml

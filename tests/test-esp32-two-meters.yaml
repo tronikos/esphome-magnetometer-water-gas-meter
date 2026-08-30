@@ -1,0 +1,6 @@
+---
+# The two-meter config drives the most pins, so it is the one worth validating
+# on ESP32 as well. The remaining configs are covered on ESP8266 via base.yaml.
+packages:
+  base: !include base-esp32.yaml
+  meters: !include ../esphome-two-meters.yaml

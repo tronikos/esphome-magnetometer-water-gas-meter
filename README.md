@@ -158,6 +158,8 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
         file: esphome-water-meter.yaml
         # Or for gas meter:
         # file: esphome-gas-meter.yaml
+        # Or if you are using QMC5883P instead of QMC5883L:
+        # files: [esphome-water-meter.yaml, qmc5883p.yaml]
         # Or if you are using HMC5883L instead of QMC5883L:
         # files: [esphome-water-meter.yaml, hmc5883l.yaml]
         # Or if you are using MMC5603 instead of QMC5883L:
@@ -207,11 +209,11 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
     # Enable Home Assistant API
     api:
       encryption:
-        key: "L8408egzTATPCBT1nzvFpqj4YlVERRO31+GyB/yjf4E="
+        key: "<keep the key the ESPHome Dashboard generated for you>"
 
     ota:
       - platform: esphome
-        password: "d44ed9df293facf65e288062d5c7a5e7"
+        password: "<keep the password the ESPHome Dashboard generated for you>"
 
     wifi:
       ssid: !secret wifi_ssid
@@ -220,10 +222,9 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
       # Enable fallback hotspot (captive portal) in case wifi connection fails
       ap:
         ssid: "water-meter Fallback Hotspot"
-        password: "8cSGOshkb2Rw"
+        password: "<keep the password the ESPHome Dashboard generated for you>"
 
     captive_portal:
-        
     ```
 
 9. Select **Save** and then **Install**.
@@ -297,7 +298,7 @@ If you have modified the `volume_unit` you have to manually convert this value.
 
 ### Setting Total Volume
 
-If you would like your "Total" reading to match the reading displayed on your physical reading, you can use the `set_total` action.
+If you would like your "Total" reading to match the reading displayed on your physical meter, you can use the `set_total` action.
 
 1. From Home Assistant, navigate to **Settings** > **Developer Tools** > **Actions**.
 2. Locate the `esphome.water_meter_set_total` action.

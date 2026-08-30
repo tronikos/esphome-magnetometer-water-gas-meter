@@ -1,9 +1,10 @@
 ---
-# NOTE: Adafruit STEMMA QT MLX90393 breakouts shipped since May 2023 default to
-# I2C address 0x18, not the chip's original default of 0x0C, due to a chip
-# substitution (see https://www.adafruit.com/product/4022). If the sensor
-# is found on an i2c bus scan but "Communication failed" / "failed to apply
-# gain" errors follow, override the address:
+# NOTE: This package sets the MLX90393 to its factory-default I2C address, 0x0C.
+# Adafruit STEMMA QT MLX90393 breakouts shipped since May 2023 are at 0x18
+# instead, due to a chip substitution (see https://www.adafruit.com/product/4022).
+# If the sensor shows up on an i2c bus scan but "Communication failed" /
+# "failed to apply gain" errors follow, override the address in your device
+# configuration:
 #
 #   sensor:
 #     - id: !extend ${prefix_id}qmc5883l_id
@@ -20,6 +21,7 @@ number:
 sensor:
   - id: !extend ${prefix_id}qmc5883l_id
     platform: mlx90393
+    address: 0x0C
     oversampling: 1
     filter: 5
     temperature: !remove ${prefix_id}qmc5883l_temperature

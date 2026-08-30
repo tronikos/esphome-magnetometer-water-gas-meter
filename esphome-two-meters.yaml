@@ -16,13 +16,27 @@ substitutions:
 
   gpio_led: GPIO2
 
-  i2c1_sda: GPIO4
-  i2c1_scl: GPIO5
-  i2c2_sda: GPIO12
-  i2c2_scl: GPIO14
+  # Bus 1 matches the single-meter default and the README wiring table (D2/D1).
+  # Bus 2 uses D7/D5. GPIO12 is deliberately avoided: it is the ESP32 MTDI
+  # strapping pin that selects flash voltage at reset, and since I2C requires
+  # pull-up resistors the line would be held high at boot, which stops most
+  # ESP32 modules (3.3V flash) from booting at all.
+  i2c1_sda: GPIO4   # D2
+  i2c1_scl: GPIO5   # D1
+  i2c2_sda: GPIO13  # D7
+  i2c2_scl: GPIO14  # D5
 
   flow_update_interval_seconds1: '10'
   flow_update_interval_seconds2: '30'
+
+  # Defaults below mirror esphome-water-meter.yaml (meter1) and
+  # esphome-gas-meter.yaml (meter2). Adjust per meter as needed.
+  volume_per_half_rotation_initial_value1: '0.01008156'
+  volume_per_half_rotation_initial_value2: '0.125'
+  calibration_minimal_axis_range_initial_value1: '20'
+  calibration_minimal_axis_range_initial_value2: '15'
+  magnetic_field_update_delta1: '3'
+  magnetic_field_update_delta2: '1'
 
 packages:
   meter1: !include
@@ -36,6 +50,9 @@ packages:
       i2c_sda: ${i2c1_sda}
       i2c_scl: ${i2c1_scl}
       flow_update_interval_seconds: ${flow_update_interval_seconds1}
+      volume_per_half_rotation_initial_value: ${volume_per_half_rotation_initial_value1}
+      calibration_minimal_axis_range_initial_value: ${calibration_minimal_axis_range_initial_value1}
+      magnetic_field_update_delta: ${magnetic_field_update_delta1}
   meter2: !include
     file: esphome-magnetometer.yaml
     vars:
@@ -47,11 +64,15 @@ packages:
       i2c_sda: ${i2c2_sda}
       i2c_scl: ${i2c2_scl}
       flow_update_interval_seconds: ${flow_update_interval_seconds2}
+      volume_per_half_rotation_initial_value: ${volume_per_half_rotation_initial_value2}
+      calibration_minimal_axis_range_initial_value: ${calibration_minimal_axis_range_initial_value2}
+      magnetic_field_update_delta: ${magnetic_field_update_delta2}
 
 switch:
-  # LED flashes faster/slower as magnet rotates on water meter
+  # LED flashes faster/slower as the magnets rotate on either meter
   - platform: gpio
     id: led
+    restore_mode: ALWAYS_OFF
     pin:
       number: ${gpio_led}
       inverted: true

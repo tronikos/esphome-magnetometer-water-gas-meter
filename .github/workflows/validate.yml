@@ -1,0 +1,69 @@
+---
+name: Validate configs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly run against ESPHome dev, so upstream breaking changes surface here
+    # before they reach users. See the install steps below.
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  esphome-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # Push/PR builds use the latest stable release so contributors are never
+      # blocked by unrelated upstream churn. Only the weekly scheduled run
+      # tracks dev, where a failure is an early warning rather than a blocker.
+      - name: Install ESPHome (stable)
+        if: github.event_name != 'schedule'
+        run: pip install esphome
+
+      - name: Install ESPHome (dev)
+        if: github.event_name == 'schedule'
+        run: pip install git+https://github.com/esphome/esphome@dev
+
+      - name: Show ESPHome version
+        run: esphome version
+
+      - name: Validate every config
+        # Resolves each sensor package and top-level config. Catches things
+        # yamllint cannot, such as a package inheriting the wrong i2c address.
+        # `shell: bash` is what gives us pipefail, so a failure here is not
+        # swallowed by the pipe into tee.
+        shell: bash
+        run: esphome config tests/test-*.yaml 2>&1 | tee /tmp/esphome-config.log
+
+      - name: Fail on unreviewed strapping-pin warnings
+        # esphome config exits 0 on strapping-pin warnings, so enforce them here.
+        # GPIO2 (LED) and GPIO5 (I2C SCL) are reviewed and safe: strapping is
+        # sampled at reset before firmware drives the pin, and GPIO5's required
+        # boot state is high, which is exactly what an I2C pull-up provides.
+        # Any other strapping pin is treated as a defect -- see GPIO12/MTDI,
+        # which an I2C pull-up holds high at boot, selecting 1.8V flash and
+        # preventing most ESP32 modules from booting at all.
+        shell: bash
+        run: |
+          unreviewed=$(grep -E 'is a strapping PIN' /tmp/esphome-config.log \
+            | grep -vE 'GPIO(2|5) is a strapping PIN' | sort -u || true)
+          if [ -n "$unreviewed" ]; then
+            echo "::error::Config uses a strapping pin that has not been reviewed:"
+            echo "$unreviewed"
+            echo "If this pin is genuinely safe in its role, add it to the allowlist in this step."
+            exit 1
+          fi
+          echo "No unreviewed strapping-pin warnings."
