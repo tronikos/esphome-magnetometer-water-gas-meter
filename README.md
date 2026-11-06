@@ -41,7 +41,7 @@ packages:
 
 The magnetometer is used to read the rotating magnet inside your water meter.
 
-This should be compatible will all the water meters the Flume water sensor is compatible with, which is [compatible](https://help.flumewater.com/en/articles/1618594-is-the-flume-device-compatible-with-all-water-meters) with about 95% of water meters in the United States.
+This should be compatible with all the water meters the Flume water sensor is compatible with, which is [compatible](https://help.flumewater.com/en/articles/1618594-is-the-flume-device-compatible-with-all-water-meters) with about 95% of water meters in the United States.
 
 To verify compatibility follow [this](https://help.flumewater.com/en/articles/1618594-is-the-flume-device-compatible-with-all-water-meters). Alternatively, install the Sensors app on your phone, place your phone next to the meter, and see if the Geomagnetic Field sensors are changing while water is running.
 
@@ -88,7 +88,7 @@ To verify compatibility install the Sensors app on your phone, place your phone 
   - I used 32.8ft or 10m direct burial CAT6. A user has reported they successfully used 75ft or 22.9m direct burial CAT6.
   - CAT6 is preferred because of its lower capacitance. CAT5 50ft or 15m [should work](https://www.youtube.com/watch?v=6v1KZBRZRCI). For 100ft you will need an active terminator such as [LTC4311](https://www.youtube.com/watch?v=nhWPxO7jx_o).
   - Do not use thermostat wire, bell wire, or any other low voltage wire. You will have communication errors or instability. You really need to be using twisted pair cables with proper shielding and lower capacitance such as CAT6.
-- Some way to weather proof the magnetometer. Some options:
+- Some way to weatherproof the magnetometer. Some options:
   - Adhesive 4:1 heat shrink tubing (this is what I used)
   - Liquid electrical tape
   - Silicone sealant
@@ -119,7 +119,7 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
 
 ## Software installation
 
-1. Setup **ESPHome**, if you don't have it already, by following [Getting Started with ESPHome and Home Assistant](https://esphome.io/guides/getting_started_hassio.html).
+1. Set up **ESPHome**, if you don't have it already, by following [Getting Started with ESPHome and Home Assistant](https://esphome.io/guides/getting_started_hassio.html).
 2. In the **ESPHome Dashboard** select **New device**, **Continue**, give a name: e.g. Water meter, **Next**, select device type based on the ESP chip used e.g. ESP8266.
 3. In the **Configuration created!** page select **Skip** to skip installation for now until we make a few changes.
 4. Select **Edit** on the created configuration e.g. water-meter.yaml.
@@ -169,7 +169,7 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
         refresh: 0s
     ```
 
-7. Change the values in the `substitutions` section based on your setting, e.g. if you have used different pins, or if you prefer a different unit.
+7. Change the values in the `substitutions` section based on your settings, e.g. if you have used different pins, or if you prefer a different unit.
 8. Your configuration should now look something like the following:
 
     ```yaml
@@ -371,7 +371,7 @@ Place another temperature sensor next to the QMC5883L and adjust the temperature
 
 ### Water Running Too Long Alert
 
-In `Settings > Devices & services > Helpers` I have created a template sensor: `sensor.water_meter_flow_minus_irrigation` with the following state template: `{{ max(0, states('sensor.water_meter_flow') | float - (0.47 if now().hour in range(7, 10) else 0)) }}`. My irrigation system consumes 0.44 gal/min between 7 to 9 am or 8 to 10 am depending on DST. You will need to adjust this to your irrigation system flow and times. If you don't have irrigation you can skip this and use `sensor.water_meter_flow` below.
+In `Settings > Devices & services > Helpers` I have created a template sensor: `sensor.water_meter_flow_minus_irrigation` with the following state template: `{{ max(0, states('sensor.water_meter_flow') | float - (0.44 if now().hour in range(7, 10) else 0)) }}`. My irrigation system consumes 0.44 gal/min between 7 to 9 am or 8 to 10 am depending on DST. You will need to adjust this to your irrigation system flow and times. If you don't have irrigation you can skip this and use `sensor.water_meter_flow` below.
 
 I have also created a template **binary sensor**, `binary_sensor.water_meter_running_minus_irrigation`, with the state template `{{ states('sensor.water_meter_flow_minus_irrigation') | float(0) > 0 }}` and **no delay off**. The automation below reads its `last_changed` to know how long water has been running. Do not add a delay off unless you have measured your own usage: bridging the gaps between separate draws merges them into one long session and causes false alerts.
 
@@ -496,7 +496,7 @@ WITH variables AS (
   -- All user-adjustable parameters are defined here for easy modification.
   SELECT
     1.5 AS flow_threshold,          -- The flow rate (e.g., in GPM or L/min) above which the water is considered "running".
-    0.47 AS irrigation_flow_reduction, -- The value to subtract from the flow rate during the irrigation window.
+    0.44 AS irrigation_flow_reduction, -- The value to subtract from the flow rate during the irrigation window.
     '07:00' AS irrigation_start_time,  -- The start time of the daily irrigation window (HH:MM).
     '10:00' AS irrigation_end_time    -- The end time of the daily irrigation window (HH:MM).
 ),

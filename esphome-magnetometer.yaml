@@ -101,7 +101,7 @@ logger:
 api:
   services:
     # Based on https://esphome.io/components/sensor/pulse_meter.html#re-setting-the-total-pulse-count
-    # Useful if you would like the total sensor to match what you see on your meter you are trying to match.
+    # Useful if you would like the total sensor to match what you see on your meter.
     - service: ${prefix_id}set_total
       variables:
         new_total: float
@@ -350,7 +350,7 @@ button:
     icon: mdi:tune
     on_press:
       - lambda: |-
-          ESP_LOGI("calibration", "Starting calibration. Make sure ${device_class} is running");
+          ESP_LOGI("${prefix_id}calibration", "Starting calibration. Make sure ${device_class} is running");
           id(${prefix_id}calibration_status).publish_state("Calibrating...");
           id(${prefix_id}calibrating_axis_x_min) = std::numeric_limits<float>::max();
           id(${prefix_id}calibrating_axis_x_max) = std::numeric_limits<float>::lowest();
