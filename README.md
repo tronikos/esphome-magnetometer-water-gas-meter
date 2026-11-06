@@ -238,18 +238,28 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
 
 ### Detection Algorithm
 
-Two detection algorithms are available, controlled by the **"Detection algorithm"** select:
+Three detection algorithms are available, controlled by the **"Detection algorithm"** select:
 
 Algorithm | Best For
 --- | ---
-**Adaptive** (default) | **Recommended**. Handles temperature drift automatically
+**Quadrature** (default) | **Recommended**. Uses all 3 axes for direction-aware counting, thermal slosh rejection, and 4x faster low-flow leak detection
+**Adaptive** | Handles temperature drift automatically on the primary axis
 **Threshold** | Backward compatibility with existing installations
 
-> **Recommendation:** Use the Adaptive algorithm. Threshold is available for backward compatibility with existing installations.
+> **Recommendation:** Use the Quadrature or Adaptive algorithm. Threshold is available for backward compatibility with existing installations.
+
+**Quadrature algorithm**:
+
+- Tracks all 3 axes (`x`, `y`, `z`) of a single magnetometer with per-axis adaptive min/max trackers and projects them onto the 2D magnet rotation plane (`I = cos`, `Q = sin`) via Gram–Schmidt orthogonalization and Maximal-Ratio Combining
+- Avoids the "top-2 amplitude" trap where the radial and vertical axes both vary as `cos` (in-phase or 180° anti-phase) while the true `sin` quadrature component is on the third axis or split across tilted axes
+- Works with a single sensor on any multipole magnet (unlike two-sensor setups placed 90° apart around the meter body, which land 180° out of phase on 4-pole magnets; see [Discussion #132](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/discussions/132))
+- Decodes 4 evenly spaced 90° Gray-code steps per cycle: forward motion adds and reverse motion subtracts, so disc rocking from plumbing thermal expansion and contraction cancels out instead of accumulating as phantom usage
+- Commits 1 count per 4 net forward steps (keeping `volume_per_half_rotation` unchanged), clamps published `Total` to its high-water mark so Home Assistant's `total_increasing` statistics never see a decrease as a meter reset, updates `Flow` on every new forward 90° step for 4x faster slow-leak detection, and reports **Flow Direction** (`Forward`, `Reverse`, `Stopped`)
+- Automatically falls back to the 1-axis **Adaptive** algorithm if selected before 3-axis calibration or if secondary axes lack sufficient quadrature signal
 
 **Adaptive algorithm**:
 
-- Automatically tracks and adapts to thermal drift
+- Automatically tracks and adapts to thermal drift on the primary axis
 - No recalibration needed when temperature changes
 - Uses a "Smart Min/Max Tracker" with window clamping and auto-centering
 
@@ -276,9 +286,10 @@ rotation at low flow, which is why the gas package defaults to 180.
 
 The system will automatically:
 
-- Detect the axis with the strongest signal
+- Detect the primary axis with the strongest signal
 - Set `Threshold lower` and `Threshold upper` (for threshold mode)
 - Set `Magnet Span` (for adaptive mode)
+- Measure all three axis spans, cross-axis phase correlations, and forward rotation direction (for quadrature mode)
 
 You can switch between algorithms at any time without recalibrating.
 

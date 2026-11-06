@@ -118,6 +118,9 @@ api:
                 ESP_LOGW("${prefix_id}set_total", "Volume per half rotation is NaN, ignoring set_total");
                 return id(${prefix_id}volume_offset);
               }
+              id(${prefix_id}quad_total_max) = NAN;
+              id(${prefix_id}quad_net_max) =
+                  (long) id(${prefix_id}half_rotations_total) * 4L + id(${prefix_id}quad_steps);
               return new_total - id(${prefix_id}half_rotations_total) * volume;
 
 globals:
@@ -171,7 +174,81 @@ globals:
     restore_value: false
     initial_value: 'NAN'
 
-  # Calibration Vars
+  # 3-Axis Quadrature state:
+  # Latest raw burst readings [x, y, z] and per-axis adaptive trackers
+  - id: ${prefix_id}raw_axes
+    type: float[3]
+    restore_value: false
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}quad_trk_min
+    type: float[3]
+    restore_value: false
+    initial_value: '{NAN, NAN, NAN}'
+  - id: ${prefix_id}quad_trk_max
+    type: float[3]
+    restore_value: false
+    initial_value: '{NAN, NAN, NAN}'
+  # Calibrated per-axis spans and 3D Gram-Schmidt / MRC projection weights (restored across reboots):
+  # quad_c[i]: in-phase correlation of axis i with primary axis p
+  # quad_s[i]: signed quadrature sin(phi_i) component of axis i
+  # quad_w[i]: Maximal-Ratio Combining weight for extracting Q = sin(theta) from secondary axes
+  # quad_wi[i]: Maximal-Ratio Combining weight for extracting I = cos(theta) from all 3 axes
+  - id: ${prefix_id}quad_span
+    type: float[3]
+    restore_value: true
+    initial_value: '{NAN, NAN, NAN}'
+  - id: ${prefix_id}quad_c
+    type: float[3]
+    restore_value: true
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}quad_s
+    type: float[3]
+    restore_value: true
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}quad_w
+    type: float[3]
+    restore_value: true
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}quad_wi
+    type: float[3]
+    restore_value: true
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}quad_i_high
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: ${prefix_id}quad_q_high
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: ${prefix_id}quad_state
+    type: int
+    restore_value: false
+    initial_value: '-1'
+  - id: ${prefix_id}quad_steps
+    type: int
+    restore_value: false
+    initial_value: '0'
+  - id: ${prefix_id}quad_net_max
+    type: long
+    restore_value: false
+    initial_value: '-2147483647'
+  - id: ${prefix_id}quad_reverse_total
+    type: long
+    restore_value: false
+    initial_value: '0'
+  # High-water mark of published Total so reverse ticks never cause a decrease on a
+  # total_increasing sensor in Home Assistant. Released by set_total and volume changes.
+  - id: ${prefix_id}quad_total_max
+    type: float
+    restore_value: true
+    initial_value: 'NAN'
+  - id: ${prefix_id}volume_per_half_rotation_prev
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+
+  # Calibration Vars (min/max and single-pass centered covariance + shoelace area)
   - id: ${prefix_id}calibrating_axis_x_min
     type: float
     restore_value: false
@@ -190,6 +267,34 @@ globals:
   - id: ${prefix_id}calibrating_axis_z_max
     type: float
     restore_value: false
+  - id: ${prefix_id}cal_n
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: ${prefix_id}cal_origin
+    type: float[3]
+    restore_value: false
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}cal_prev
+    type: float[3]
+    restore_value: false
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}cal_sum
+    type: float[3]
+    restore_value: false
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}cal_sum2
+    type: float[3]
+    restore_value: false
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}cal_cross
+    type: float[3]
+    restore_value: false
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}cal_area
+    type: float[3]
+    restore_value: false
+    initial_value: '{0, 0, 0}'
 
 number:
   - platform: template
@@ -206,6 +311,13 @@ number:
     optimistic: true
     unit_of_measurement: ${volume_unit}
     icon: mdi:rotate-360
+    on_value:
+      then:
+        - lambda: |-
+            if (!std::isnan(id(${prefix_id}volume_per_half_rotation_prev))) {
+              id(${prefix_id}quad_total_max) = NAN;
+            }
+            id(${prefix_id}volume_per_half_rotation_prev) = x;
 
   - platform: template
     id: ${prefix_id}temperature_offset
@@ -319,6 +431,14 @@ select:
     on_value:
       then:
         - lambda: |-
+            id(${prefix_id}track_max) = NAN;
+            id(${prefix_id}track_min) = NAN;
+            for (int i = 0; i < 3; i++) {
+              id(${prefix_id}quad_trk_max)[i] = NAN;
+              id(${prefix_id}quad_trk_min)[i] = NAN;
+            }
+            id(${prefix_id}quad_state) = -1;
+            id(${prefix_id}quad_steps) = 0;
             if (x == "None") {
               id(${prefix_id}calibration_status).publish_state("Not Calibrated");
             } else if (!id(${prefix_id}calibrating)) {
@@ -333,10 +453,17 @@ select:
     options:
       - Adaptive
       - Threshold
-    initial_option: Adaptive
+      - Quadrature
+    initial_option: Quadrature
     update_interval: never
     restore_value: true
     optimistic: true
+    on_value:
+      then:
+        - lambda: |-
+            id(${prefix_id}quad_state) = -1;
+            id(${prefix_id}quad_steps) = 0;
+            id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
 
 text_sensor:
   - platform: template
@@ -344,6 +471,13 @@ text_sensor:
     name: ${prefix_name}Calibration Status
     entity_category: diagnostic
     icon: mdi:information-outline
+    update_interval: never
+
+  - platform: template
+    id: ${prefix_id}flow_direction
+    name: ${prefix_name}Flow Direction
+    entity_category: diagnostic
+    icon: mdi:swap-horizontal
     update_interval: never
 
 button:
@@ -362,6 +496,13 @@ button:
           id(${prefix_id}calibrating_axis_y_max) = std::numeric_limits<float>::lowest();
           id(${prefix_id}calibrating_axis_z_min) = std::numeric_limits<float>::max();
           id(${prefix_id}calibrating_axis_z_max) = std::numeric_limits<float>::lowest();
+          id(${prefix_id}cal_n) = 0;
+          for (int i = 0; i < 3; i++) {
+            id(${prefix_id}cal_sum)[i] = 0.0f;
+            id(${prefix_id}cal_sum2)[i] = 0.0f;
+            id(${prefix_id}cal_cross)[i] = 0.0f;
+            id(${prefix_id}cal_area)[i] = 0.0f;
+          }
           id(${prefix_id}calibrating) = true;
       - delay: !lambda return id(${prefix_id}calibration_seconds).state * 1000;
       - lambda: |-
@@ -389,29 +530,30 @@ button:
             ESP_LOGI("${prefix_id}calibration", "z ranged from %.2f to %.2f (range: %.2f)",
                      id(${prefix_id}calibrating_axis_z_min), id(${prefix_id}calibrating_axis_z_max), z_range);
           }
-          std::string axis_with_largest_range;
-          float min, max;
-          float max_range_found = 0;
-          if (x_range > min_axis_range && x_range > y_range && x_range > z_range) {
-            axis_with_largest_range = "x";
-            min = id(${prefix_id}calibrating_axis_x_min);
-            max = id(${prefix_id}calibrating_axis_x_max);
-            max_range_found = x_range;
-          } else if (y_range > min_axis_range && y_range > x_range && y_range > z_range) {
-            axis_with_largest_range = "y";
-            min = id(${prefix_id}calibrating_axis_y_min);
-            max = id(${prefix_id}calibrating_axis_y_max);
-            max_range_found = y_range;
-          } else if (z_range > min_axis_range && z_range > x_range && z_range > y_range) {
-            axis_with_largest_range = "z";
-            min = id(${prefix_id}calibrating_axis_z_min);
-            max = id(${prefix_id}calibrating_axis_z_max);
-            max_range_found = z_range;
-          } else {
+          const char *axis_names[3] = {"x", "y", "z"};
+          float mins[3] = {
+            id(${prefix_id}calibrating_axis_x_min),
+            id(${prefix_id}calibrating_axis_y_min),
+            id(${prefix_id}calibrating_axis_z_min),
+          };
+          float maxs[3] = {
+            id(${prefix_id}calibrating_axis_x_max),
+            id(${prefix_id}calibrating_axis_y_max),
+            id(${prefix_id}calibrating_axis_z_max),
+          };
+          float ranges[3] = {x_range, y_range, z_range};
+          int p = 0;
+          if (ranges[1] > ranges[p]) p = 1;
+          if (ranges[2] > ranges[p]) p = 2;
+          if (ranges[p] <= min_axis_range) {
             ESP_LOGE("${prefix_id}calibration", "Calibration failed. No axis had a range of at least %.0f", min_axis_range);
             id(${prefix_id}calibration_status).publish_state("Failed: low signal");
             return;
           }
+          std::string axis_with_largest_range = axis_names[p];
+          float min = mins[p];
+          float max = maxs[p];
+          float max_range_found = ranges[p];
 
           id(${prefix_id}axis).make_call().set_option(axis_with_largest_range).perform();
 
@@ -419,6 +561,77 @@ button:
           id(${prefix_id}magnet_span).make_call().set_value(roundf(max_range_found * 10) / 10).perform();
           id(${prefix_id}track_max) = NAN;
           id(${prefix_id}track_min) = NAN;
+
+          // Compute 3-axis Quadrature spans and Gram-Schmidt / Maximal-Ratio Combining weights
+          float inv_n = (id(${prefix_id}cal_n) > 1) ? (1.0f / id(${prefix_id}cal_n)) : 0.0f;
+          float mean[3] = {
+            id(${prefix_id}cal_sum)[0] * inv_n,
+            id(${prefix_id}cal_sum)[1] * inv_n,
+            id(${prefix_id}cal_sum)[2] * inv_n,
+          };
+          float var[3];
+          for (int i = 0; i < 3; i++) {
+            float v = id(${prefix_id}cal_sum2)[i] * inv_n - mean[i] * mean[i];
+            var[i] = (v > 0.0f) ? v : 0.0f;
+            id(${prefix_id}quad_span)[i] = (ranges[i] > 1.0f) ? (roundf(ranges[i] * 10) / 10) : 1.0f;
+            id(${prefix_id}quad_trk_max)[i] = NAN;
+            id(${prefix_id}quad_trk_min)[i] = NAN;
+          }
+          float cov[3][3] = {};
+          cov[0][1] = cov[1][0] = id(${prefix_id}cal_cross)[0] * inv_n - mean[0] * mean[1];
+          cov[0][2] = cov[2][0] = id(${prefix_id}cal_cross)[1] * inv_n - mean[0] * mean[2];
+          cov[1][2] = cov[2][1] = id(${prefix_id}cal_cross)[2] * inv_n - mean[1] * mean[2];
+          // Exact mean-centered shoelace areas via telescoping boundary correction
+          float area[3][3] = {};
+          area[0][1] = id(${prefix_id}cal_area)[0] - mean[0] * id(${prefix_id}cal_prev)[1] + mean[1] * id(${prefix_id}cal_prev)[0];
+          area[1][0] = -area[0][1];
+          area[0][2] = id(${prefix_id}cal_area)[1] - mean[0] * id(${prefix_id}cal_prev)[2] + mean[2] * id(${prefix_id}cal_prev)[0];
+          area[2][0] = -area[0][2];
+          area[1][2] = id(${prefix_id}cal_area)[2] - mean[1] * id(${prefix_id}cal_prev)[2] + mean[2] * id(${prefix_id}cal_prev)[1];
+          area[2][1] = -area[1][2];
+
+          float snr[3] = {};
+          float denom_q = 0.0f;
+          float denom_i = 0.0f;
+          float eff_quad_sq = 0.0f;
+          for (int i = 0; i < 3; i++) {
+            float rel = (ranges[i] > 0.0f) ? (ranges[i] / max_range_found) : 0.0f;
+            snr[i] = rel * rel;
+            if (i == p) {
+              id(${prefix_id}quad_c)[i] = 1.0f;
+              id(${prefix_id}quad_s)[i] = 0.0f;
+            } else if (ranges[i] >= min_axis_range * 0.25f && var[p] > 0.0f && var[i] > 0.0f) {
+              float r = cov[p][i] / sqrtf(var[p] * var[i]);
+              if (r > 0.98f) r = 0.98f;
+              if (r < -0.98f) r = -0.98f;
+              float s_mag = sqrtf(1.0f - r * r);
+              float s_sign = (area[p][i] >= 0.0f) ? 1.0f : -1.0f;
+              id(${prefix_id}quad_c)[i] = r;
+              id(${prefix_id}quad_s)[i] = s_sign * s_mag;
+              denom_q += snr[i] * s_mag * s_mag;
+              eff_quad_sq += ranges[i] * ranges[i] * s_mag * s_mag;
+            } else {
+              id(${prefix_id}quad_c)[i] = 0.0f;
+              id(${prefix_id}quad_s)[i] = 0.0f;
+              snr[i] = 0.0f;
+            }
+            denom_i += snr[i] * id(${prefix_id}quad_c)[i] * id(${prefix_id}quad_c)[i];
+          }
+          bool quad_ok = sqrtf(eff_quad_sq) >= min_axis_range * 0.25f && denom_q > 1e-4f;
+          for (int i = 0; i < 3; i++) {
+            id(${prefix_id}quad_w)[i] = (i != p && quad_ok)
+                ? (snr[i] * id(${prefix_id}quad_s)[i] / denom_q) : 0.0f;
+            id(${prefix_id}quad_wi)[i] = (denom_i > 1e-4f)
+                ? (snr[i] * id(${prefix_id}quad_c)[i] / denom_i) : ((i == p) ? 1.0f : 0.0f);
+          }
+          if (!quad_ok) {
+            ESP_LOGW("${prefix_id}calibration",
+                     "Insufficient quadrature signal on secondary axes (quad_eff_span=%.2f); falling back to Adaptive",
+                     sqrtf(eff_quad_sq));
+          }
+          id(${prefix_id}quad_state) = -1;
+          id(${prefix_id}quad_steps) = 0;
+          id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
 
           // Set thresholds for threshold-based algorithm
           // ±5 µT of tolerance, scaled from the reference range of 20 (i.e. min_axis_range / 4).
@@ -428,8 +641,10 @@ button:
           id(${prefix_id}threshold_lower).make_call().set_value(roundf(lower_threshold * 10) / 10).perform();
           id(${prefix_id}threshold_upper).make_call().set_value(roundf(upper_threshold * 10) / 10).perform();
 
-          ESP_LOGI("${prefix_id}calibration", "Calibration complete: axis=%s, span=%.2f, thresholds=[%.1f, %.1f]",
-                   axis_with_largest_range.c_str(), max_range_found, lower_threshold, upper_threshold);
+          ESP_LOGI("${prefix_id}calibration",
+                   "Calibration complete: axis=%s, span=%.2f, quad_eff_span=%.2f, thresholds=[%.1f, %.1f]",
+                   axis_with_largest_range.c_str(), max_range_found, sqrtf(eff_quad_sq),
+                   lower_threshold, upper_threshold);
 
 i2c:
   - id: ${prefix_id}i2c_bus
@@ -447,7 +662,14 @@ sensor:
     on_value:
       then:
         - lambda: |-
-            if (id(${prefix_id}detection_algorithm).current_option() == "Adaptive") {
+            // Quadrature is evaluated once per x->y->z burst on the z-axis callback below.
+            // If Quadrature is selected before 3-axis calibration (or secondary axes lack signal),
+            // automatically fall back to 1-axis Adaptive on the selected primary axis.
+            bool quad_ready = id(${prefix_id}quad_w)[0] != 0.0f ||
+                              id(${prefix_id}quad_w)[1] != 0.0f ||
+                              id(${prefix_id}quad_w)[2] != 0.0f;
+            if (id(${prefix_id}detection_algorithm).current_option() == "Quadrature" && quad_ready) return;
+            if (id(${prefix_id}detection_algorithm).current_option() != "Threshold") {
               // === ADAPTIVE ALGORITHM: Min/Max Tracker with Range Clamping ===
 
               // 1. Initialize Trackers if empty (NAN on boot or after calibration)
@@ -498,6 +720,9 @@ sensor:
                 id(${prefix_id}axis_value_high) = true;
                 id(${prefix_id}half_rotations_total) += 1;
                 id(${prefix_id}half_rotations_flow) += 1;
+                if (id(${prefix_id}flow_direction).state != "Forward") {
+                  id(${prefix_id}flow_direction).publish_state("Forward");
+                }
                 {
                   // Record the interval for the flow estimator. The total counter above is
                   // never gated on this: a rejected bounce must not lose volume.
@@ -534,6 +759,9 @@ sensor:
               id(${prefix_id}axis_value_high) = true;
               id(${prefix_id}half_rotations_total) += 1;
               id(${prefix_id}half_rotations_flow) += 1;
+              if (id(${prefix_id}flow_direction).state != "Forward") {
+                id(${prefix_id}flow_direction).publish_state("Forward");
+              }
               {
                 // Record the interval for the flow estimator. The total counter above is
                 // never gated on this: a rejected bounce must not lose volume.
@@ -577,6 +805,7 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
+              id(${prefix_id}raw_axes)[0] = x;
               if (id(${prefix_id}axis).current_option() == "x") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_x_min) = min(id(${prefix_id}calibrating_axis_x_min), x);
@@ -592,6 +821,7 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
+              id(${prefix_id}raw_axes)[1] = x;
               if (id(${prefix_id}axis).current_option() == "y") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_y_min) = min(id(${prefix_id}calibrating_axis_y_min), x);
@@ -607,10 +837,163 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
+              id(${prefix_id}raw_axes)[2] = x;
               if (id(${prefix_id}axis).current_option() == "z") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_z_min) = min(id(${prefix_id}calibrating_axis_z_min), x);
                 id(${prefix_id}calibrating_axis_z_max) = max(id(${prefix_id}calibrating_axis_z_max), x);
+                if (id(${prefix_id}cal_n) == 0) {
+                  for (int i = 0; i < 3; i++) {
+                    id(${prefix_id}cal_origin)[i] = id(${prefix_id}raw_axes)[i];
+                    id(${prefix_id}cal_prev)[i] = 0.0f;
+                  }
+                }
+                float d0 = id(${prefix_id}raw_axes)[0] - id(${prefix_id}cal_origin)[0];
+                float d1 = id(${prefix_id}raw_axes)[1] - id(${prefix_id}cal_origin)[1];
+                float d2 = id(${prefix_id}raw_axes)[2] - id(${prefix_id}cal_origin)[2];
+                id(${prefix_id}cal_sum)[0] += d0;
+                id(${prefix_id}cal_sum)[1] += d1;
+                id(${prefix_id}cal_sum)[2] += d2;
+                id(${prefix_id}cal_sum2)[0] += d0 * d0;
+                id(${prefix_id}cal_sum2)[1] += d1 * d1;
+                id(${prefix_id}cal_sum2)[2] += d2 * d2;
+                id(${prefix_id}cal_cross)[0] += d0 * d1;
+                id(${prefix_id}cal_cross)[1] += d0 * d2;
+                id(${prefix_id}cal_cross)[2] += d1 * d2;
+                id(${prefix_id}cal_area)[0] += id(${prefix_id}cal_prev)[0] * d1 - d0 * id(${prefix_id}cal_prev)[1];
+                id(${prefix_id}cal_area)[1] += id(${prefix_id}cal_prev)[0] * d2 - d0 * id(${prefix_id}cal_prev)[2];
+                id(${prefix_id}cal_area)[2] += id(${prefix_id}cal_prev)[1] * d2 - d1 * id(${prefix_id}cal_prev)[2];
+                id(${prefix_id}cal_prev)[0] = d0;
+                id(${prefix_id}cal_prev)[1] = d1;
+                id(${prefix_id}cal_prev)[2] = d2;
+                id(${prefix_id}cal_n) += 1;
+              }
+              if (id(${prefix_id}detection_algorithm).current_option() != "Quadrature") return;
+              if (id(${prefix_id}quad_w)[0] == 0.0f && id(${prefix_id}quad_w)[1] == 0.0f &&
+                  id(${prefix_id}quad_w)[2] == 0.0f) return;
+              std::string main_axis = id(${prefix_id}axis).current_option();
+              int p = (main_axis == "x") ? 0 : ((main_axis == "y") ? 1 : ((main_axis == "z") ? 2 : -1));
+              if (p < 0) return;
+
+              // 1. Update per-axis Adaptive Min/Max Trackers and normalize all 3 axes to [-1, +1]
+              float u[3];
+              for (int i = 0; i < 3; i++) {
+                float val = id(${prefix_id}raw_axes)[i];
+                float span_cfg = id(${prefix_id}quad_span)[i];
+                if (std::isnan(span_cfg) || span_cfg < 1.0f) span_cfg = id(${prefix_id}magnet_span).state;
+                float &tmax = id(${prefix_id}quad_trk_max)[i];
+                float &tmin = id(${prefix_id}quad_trk_min)[i];
+                if (std::isnan(tmax) || std::isnan(tmin)) {
+                  tmax = val + span_cfg / 2.0f;
+                  tmin = val - span_cfg / 2.0f;
+                }
+                float axis_decay = ${tracker_decay_rate} * (span_cfg / 40.0f);
+                tmax -= axis_decay;
+                tmin += axis_decay;
+                float max_allowed = span_cfg * ${max_span_multiplier};
+                if (val > tmax) {
+                  tmax = val;
+                  if ((tmax - tmin) > max_allowed) tmin = tmax - max_allowed;
+                }
+                if (val < tmin) {
+                  tmin = val;
+                  if ((tmax - tmin) > max_allowed) tmax = tmin + max_allowed;
+                }
+                float min_span = span_cfg * ${min_span_multiplier};
+                float cur_span = tmax - tmin;
+                if (cur_span < min_span) {
+                  float corr = (min_span - cur_span) / 2.0f;
+                  tmax += corr;
+                  tmin -= corr;
+                }
+                u[i] = 2.0f * (val - (tmax + tmin) / 2.0f) / (tmax - tmin);
+              }
+              id(${prefix_id}track_max) = id(${prefix_id}quad_trk_max)[p];
+              id(${prefix_id}track_min) = id(${prefix_id}quad_trk_min)[p];
+
+              // 2. Project all 3 normalized axes onto the orthogonal (I = cos, Q = sin) plane
+              float q_val = 0.0f;
+              for (int i = 0; i < 3; i++) {
+                if (i != p) {
+                  q_val += id(${prefix_id}quad_w)[i] * (u[i] - id(${prefix_id}quad_c)[i] * u[p]);
+                }
+              }
+              float i_val = 0.0f;
+              for (int i = 0; i < 3; i++) {
+                i_val += id(${prefix_id}quad_wi)[i] * (u[i] - id(${prefix_id}quad_s)[i] * q_val);
+              }
+
+              // 3. 4-state Gray-code Schmitt-trigger decoder on the orthogonalized (I, Q) circle
+              if (i_val > 0.35f) {
+                id(${prefix_id}quad_i_high) = true;
+              } else if (i_val < -0.35f) {
+                id(${prefix_id}quad_i_high) = false;
+              }
+              if (q_val > 0.35f) {
+                id(${prefix_id}quad_q_high) = true;
+              } else if (q_val < -0.35f) {
+                id(${prefix_id}quad_q_high) = false;
+              }
+              int phase = id(${prefix_id}quad_i_high)
+                  ? (id(${prefix_id}quad_q_high) ? 1 : 0)
+                  : (id(${prefix_id}quad_q_high) ? 2 : 3);
+              if (id(${prefix_id}quad_state) < 0) {
+                id(${prefix_id}quad_state) = phase;
+                id(${prefix_id}quad_net_max) =
+                    (long) id(${prefix_id}half_rotations_total) * 4L + id(${prefix_id}quad_steps);
+                return;
+              }
+              int diff = (phase - id(${prefix_id}quad_state)) & 3;
+              if (diff == 0) return;
+              id(${prefix_id}quad_state) = phase;
+              if (diff == 2) return;
+              int step = (diff == 1) ? 1 : -1;
+              id(${prefix_id}quad_steps) += step;
+              if (id(${prefix_id}quad_i_high)) {
+                id(led).turn_on();
+              } else {
+                id(led).turn_off();
+              }
+
+              // Commit full forward or reverse cycles (4 quadrature steps = 1 half-rotation count)
+              if (id(${prefix_id}quad_steps) >= 4) {
+                id(${prefix_id}quad_steps) -= 4;
+                id(${prefix_id}half_rotations_total) += 1;
+                id(${prefix_id}half_rotations_flow) += 1;
+              } else if (id(${prefix_id}quad_steps) <= -4) {
+                id(${prefix_id}quad_steps) += 4;
+                id(${prefix_id}half_rotations_total) -= 1;
+                id(${prefix_id}half_rotations_flow) -= 1;
+                id(${prefix_id}quad_reverse_total) += 1;
+              }
+
+              long net_q = (long) id(${prefix_id}half_rotations_total) * 4L + id(${prefix_id}quad_steps);
+              if (net_q > id(${prefix_id}quad_net_max)) {
+                id(${prefix_id}quad_net_max) = net_q;
+                if (id(${prefix_id}flow_direction).state != "Forward") {
+                  id(${prefix_id}flow_direction).publish_state("Forward");
+                }
+                uint32_t now_ms = millis();
+                if (id(${prefix_id}last_pulse_ms) != 0) {
+                  uint32_t dt_step = now_ms - id(${prefix_id}last_pulse_ms);
+                  if (dt_step >= 3) {
+                    uint32_t dt = dt_step * 4;
+                    if (dt_step > ${max_silence_seconds} * 1000UL) {
+                      id(${prefix_id}iv1) = 0;
+                      id(${prefix_id}iv2) = 0;
+                      id(${prefix_id}iv0) = dt;
+                    } else {
+                      id(${prefix_id}iv2) = id(${prefix_id}iv1);
+                      id(${prefix_id}iv1) = id(${prefix_id}iv0);
+                      id(${prefix_id}iv0) = dt;
+                    }
+                  }
+                }
+                id(${prefix_id}last_pulse_ms) = now_ms;
+              } else if (id(${prefix_id}quad_net_max) - net_q >= 2) {
+                if (id(${prefix_id}flow_direction).state != "Reverse") {
+                  id(${prefix_id}flow_direction).publish_state("Reverse");
+                }
               }
       filters:
         - delta: ${magnetic_field_update_delta}
@@ -668,11 +1051,31 @@ sensor:
       - delta: 0
 
   - platform: template
+    id: ${prefix_id}sensor_quad_reverse_total
+    name: ${prefix_name}Reverse counts total
+    lambda: return id(${prefix_id}quad_reverse_total);
+    update_interval: 1s
+    internal: ${hide_half_rotations_total_sensor}
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    state_class: 'total_increasing'
+    icon: 'mdi:counter'
+    filters:
+      - delta: 0
+
+  - platform: template
     id: ${prefix_id}sensor_total
     name: ${prefix_name}Total
     lambda: |-
-      return id(${prefix_id}half_rotations_total) * id(${prefix_id}volume_per_half_rotation).state
-             + id(${prefix_id}volume_offset);
+      float current = id(${prefix_id}half_rotations_total) * id(${prefix_id}volume_per_half_rotation).state
+                      + id(${prefix_id}volume_offset);
+      // Total is total_increasing: Home Assistant treats a decrease as a meter reset
+      // and adds the entire register as phantom consumption. Hold the high-water mark
+      // when reverse ticks occur in Quadrature mode until forward flow catches back up.
+      if (std::isnan(id(${prefix_id}quad_total_max)) || current > id(${prefix_id}quad_total_max)) {
+        id(${prefix_id}quad_total_max) = current;
+      }
+      return id(${prefix_id}quad_total_max);
     update_interval: 10s
     accuracy_decimals: 2
     device_class: ${device_class}
@@ -698,7 +1101,12 @@ sensor:
         // window cannot express a rate below one count per window, and on a coarse gas
         // index, where one count can be worth a couple of ft3, that floor sits above
         // the steady draw of every residential appliance.
-        if (id(${prefix_id}last_pulse_ms) == 0 || id(${prefix_id}iv0) == 0) return 0.0f;
+        if (id(${prefix_id}last_pulse_ms) == 0 || id(${prefix_id}iv0) == 0) {
+          if (id(${prefix_id}flow_direction).state != "Stopped") {
+            id(${prefix_id}flow_direction).publish_state("Stopped");
+          }
+          return 0.0f;
+        }
 
         // Median of up to 3 intervals. A spurious edge splits one real interval into a
         // very short and a near-normal one, and the median discards the short one. It
@@ -726,8 +1134,14 @@ sensor:
 
         // Silence allowed before Flow reads zero. The floor stops a sharp deceleration
         // (shower throttled to a trickle) being mistaken for a stop; the ceiling bounds
-        // how long Flow lingers so automations keyed on zero still fire.
-        uint32_t timeout = (uint32_t)(2.5f * med);
+        // how long Flow lingers so automations keyed on zero still fire. In Quadrature
+        // mode, pulses arrive every quarter-cycle (med / 4).
+        bool quad_active = id(${prefix_id}detection_algorithm).current_option() == "Quadrature" &&
+                           (id(${prefix_id}quad_w)[0] != 0.0f ||
+                            id(${prefix_id}quad_w)[1] != 0.0f ||
+                            id(${prefix_id}quad_w)[2] != 0.0f);
+        uint32_t step_scale = quad_active ? 4UL : 1UL;
+        uint32_t timeout = (uint32_t)(2.5f * (med / step_scale));
         if (timeout < floor_ms) timeout = floor_ms;
         if (timeout > ceil_ms) timeout = ceil_ms;
 
@@ -735,12 +1149,19 @@ sensor:
         // buffer. Intervals longer than the timeout are still measured, so a slow leak
         // keeps reporting its real rate instead of being stuck at zero forever.
         uint32_t elapsed = millis() - id(${prefix_id}last_pulse_ms);
-        if (elapsed > timeout) return 0.0f;
+        if (elapsed > timeout) {
+          if (id(${prefix_id}flow_direction).state != "Stopped") {
+            id(${prefix_id}flow_direction).publish_state("Stopped");
+          }
+          return 0.0f;
+        }
 
-        // While silent, the true rate cannot exceed one pulse per elapsed time, so the
-        // reading decays along that bound instead of holding a stale higher value.
+        // While silent, the true rate cannot exceed one pulse (or quarter-pulse in
+        // Quadrature mode) per elapsed time, so the reading decays along that bound
+        // instead of holding a stale higher value.
         float rate = vol * 60000.0f / med;
-        float bound = vol * 60000.0f / (elapsed > 0 ? elapsed : 1);
+        uint32_t scaled_elapsed = (elapsed > 0 ? elapsed : 1) * step_scale;
+        float bound = vol * 60000.0f / scaled_elapsed;
         return (rate < bound) ? rate : bound;
       }
 
@@ -748,6 +1169,12 @@ sensor:
       // non-zero value it can report is one count per update interval.
       float flow = id(${prefix_id}half_rotations_flow) * vol * 60.0f / ${flow_update_interval_seconds};
       id(${prefix_id}half_rotations_flow) = 0;
+      if (flow <= 0.0f) {
+        if (id(${prefix_id}flow_direction).state != "Stopped") {
+          id(${prefix_id}flow_direction).publish_state("Stopped");
+        }
+        return 0.0f;
+      }
       return flow;
     update_interval: ${flow_update_interval_seconds}s
     accuracy_decimals: ${flow_accuracy_decimals}
