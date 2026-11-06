@@ -222,6 +222,10 @@ globals:
     type: long
     restore_value: false
     initial_value: '-2147483647'
+  - id: ${prefix_id}quad_t
+    type: uint32_t[4]
+    restore_value: false
+    initial_value: '{0, 0, 0, 0}'
   - id: ${prefix_id}quad_reverse_total
     type: long
     restore_value: false
@@ -928,6 +932,7 @@ sensor:
                 id(${prefix_id}quad_state) = phase;
                 id(${prefix_id}quad_net_max) =
                     (long) id(${prefix_id}half_rotations_total) * 4L + id(${prefix_id}quad_steps);
+                for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
                 return;
               }
               int diff = (phase - id(${prefix_id}quad_state)) & 3;
@@ -959,21 +964,27 @@ sensor:
                   id(${prefix_id}flow_direction).publish_state("Forward");
                 }
                 uint32_t now_ms = millis();
+                int q_idx = (int) (net_q & 3L);
+                uint32_t t4 = id(${prefix_id}quad_t)[q_idx];
                 if (id(${prefix_id}last_pulse_ms) != 0) {
                   uint32_t dt_step = now_ms - id(${prefix_id}last_pulse_ms);
                   if (dt_step >= 3) {
-                    uint32_t dt = dt_step * 4;
                     if (dt_step > ${max_silence_seconds} * 1000UL) {
+                      for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
                       id(${prefix_id}iv1) = 0;
                       id(${prefix_id}iv2) = 0;
-                      id(${prefix_id}iv0) = dt;
+                      id(${prefix_id}iv0) = dt_step * 4;
                     } else {
+                      // Use the full 4-step (half-rotation) period once 4 steps have
+                      // accumulated in the current session so quadrant asymmetry cancels out.
+                      uint32_t dt = (t4 != 0) ? (now_ms - t4) : (dt_step * 4);
                       id(${prefix_id}iv2) = id(${prefix_id}iv1);
                       id(${prefix_id}iv1) = id(${prefix_id}iv0);
                       id(${prefix_id}iv0) = dt;
                     }
                   }
                 }
+                id(${prefix_id}quad_t)[q_idx] = now_ms;
                 id(${prefix_id}last_pulse_ms) = now_ms;
               } else if (id(${prefix_id}quad_net_max) - net_q >= 2) {
                 if (id(${prefix_id}flow_direction).state != "Reverse") {
@@ -1098,17 +1109,22 @@ sensor:
       // because Arduino cores define those as function-like macros.
       uint32_t floor_ms = ${min_silence_seconds} * 1000UL;
       uint32_t ceil_ms = ${max_silence_seconds} * 1000UL;
+      bool quad_active = id(${prefix_id}detection_algorithm).current_option() == "Quadrature" &&
+                         (id(${prefix_id}quad_w)[0] != 0.0f ||
+                          id(${prefix_id}quad_w)[1] != 0.0f ||
+                          id(${prefix_id}quad_w)[2] != 0.0f);
+      uint32_t step_scale = quad_active ? 4UL : 1UL;
 
       uint32_t a = id(${prefix_id}iv0), b = id(${prefix_id}iv1), c = id(${prefix_id}iv2);
       uint32_t med;
       if (b == 0) {
         med = a;
       } else if (c == 0) {
-        // An interval longer than ceil_ms can only be a session-start gap (any such
-        // gap resets the buffer above), never a real in-session interval. Averaging
-        // it in would drag the first minutes of a new burn/draw down to near zero,
-        // so with only two samples the older one is dropped rather than averaged.
-        med = (b > ceil_ms) ? a : (a + b) / 2;
+        // An interval longer than ceil_ms * step_scale can only be a session-start gap
+        // (any such gap resets the buffer above), never a real in-session interval.
+        // Averaging it in would drag the first minutes of a new burn/draw down to near
+        // zero, so with only two samples the older one is dropped rather than averaged.
+        med = (b > ceil_ms * step_scale) ? a : (a + b) / 2;
       } else {
         uint32_t lo = (a < b) ? a : b;
         uint32_t hi = (a < b) ? b : a;
@@ -1119,11 +1135,6 @@ sensor:
       // (shower throttled to a trickle) being mistaken for a stop; the ceiling bounds
       // how long Flow lingers so automations keyed on zero still fire. In Quadrature
       // mode, pulses arrive every quarter-cycle (med / 4).
-      bool quad_active = id(${prefix_id}detection_algorithm).current_option() == "Quadrature" &&
-                         (id(${prefix_id}quad_w)[0] != 0.0f ||
-                          id(${prefix_id}quad_w)[1] != 0.0f ||
-                          id(${prefix_id}quad_w)[2] != 0.0f);
-      uint32_t step_scale = quad_active ? 4UL : 1UL;
       uint32_t timeout = (uint32_t)(2.5f * (med / step_scale));
       if (timeout < floor_ms) timeout = floor_ms;
       if (timeout > ceil_ms) timeout = ceil_ms;
