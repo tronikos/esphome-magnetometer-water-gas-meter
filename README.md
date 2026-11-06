@@ -243,7 +243,7 @@ Three detection algorithms are available, controlled by the **"Detection algorit
 Algorithm | Best For
 --- | ---
 **Quadrature** (default) | **Recommended**. Uses all 3 axes for direction-aware counting, thermal slosh rejection, and 4x faster low-flow leak detection
-**Adaptive** | Handles temperature drift automatically on the primary axis
+**Adaptive** | Handles temperature drift automatically on the primary axis; supports 2x higher max flow rate
 **Threshold** | Backward compatibility with existing installations
 
 > **Recommendation:** Use the Quadrature or Adaptive algorithm. Threshold is available for backward compatibility with existing installations.
@@ -256,6 +256,7 @@ Algorithm | Best For
 - Decodes 4 evenly spaced 90° Gray-code steps per cycle: forward motion adds and reverse motion subtracts, so disc rocking from plumbing thermal expansion and contraction cancels out instead of accumulating as phantom usage
 - Commits 1 count per 4 net forward steps (keeping `volume_per_half_rotation` unchanged), clamps published `Total` to its high-water mark so Home Assistant's `total_increasing` statistics never see a decrease as a meter reset, updates `Flow` on every new forward 90° step for 4x faster slow-leak detection, and reports **Flow Direction** (`Forward`, `Reverse`, `Stopped`)
 - Automatically falls back to the 1-axis **Adaptive** algorithm if selected before 3-axis calibration or if secondary axes lack sufficient quadrature signal
+- Requires at least 4 samples per magnetic cycle (vs. 2 for Adaptive), which halves the maximum flow rate ceiling (~33–50 cycles/s at 200 Hz on ESP32, or ~32–47 GPM on a 3/4" Badger 35)
 
 **Adaptive algorithm**:
 
