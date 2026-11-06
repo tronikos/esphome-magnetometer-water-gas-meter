@@ -37,8 +37,6 @@ substitutions:
   calibration_minimal_axis_range_initial_value2: '15'
   magnetic_field_update_delta1: '3'
   magnetic_field_update_delta2: '1'
-  flow_algorithm1: 'interval'
-  flow_algorithm2: 'interval'
   min_silence_seconds1: '15'
   min_silence_seconds2: '60'
   max_silence_seconds1: '60'
@@ -63,7 +61,6 @@ packages:
       volume_per_half_rotation_initial_value: ${volume_per_half_rotation_initial_value1}
       calibration_minimal_axis_range_initial_value: ${calibration_minimal_axis_range_initial_value1}
       magnetic_field_update_delta: ${magnetic_field_update_delta1}
-      flow_algorithm: ${flow_algorithm1}
       min_silence_seconds: ${min_silence_seconds1}
       max_silence_seconds: ${max_silence_seconds1}
       flow_accuracy_decimals: ${flow_accuracy_decimals1}
@@ -82,7 +79,6 @@ packages:
       volume_per_half_rotation_initial_value: ${volume_per_half_rotation_initial_value2}
       calibration_minimal_axis_range_initial_value: ${calibration_minimal_axis_range_initial_value2}
       magnetic_field_update_delta: ${magnetic_field_update_delta2}
-      flow_algorithm: ${flow_algorithm2}
       min_silence_seconds: ${min_silence_seconds2}
       max_silence_seconds: ${max_silence_seconds2}
       flow_accuracy_decimals: ${flow_accuracy_decimals2}
