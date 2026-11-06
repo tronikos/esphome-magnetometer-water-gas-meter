@@ -221,11 +221,13 @@ number:
     initial_value: 33
     icon: 'mdi:thermometer'
     entity_category: config
+    disabled_by_default: true
 
   - platform: template
     id: ${prefix_id}magnet_span
     name: ${prefix_name}Magnet Span
     entity_category: config
+    disabled_by_default: true
     mode: box
     min_value: 1.0
     max_value: 2000
@@ -241,6 +243,7 @@ number:
     id: ${prefix_id}threshold_lower
     name: ${prefix_name}Threshold lower
     entity_category: config
+    disabled_by_default: true
     mode: box
     min_value: -9999
     max_value: 9999
@@ -256,6 +259,7 @@ number:
     id: ${prefix_id}threshold_upper
     name: ${prefix_name}Threshold upper
     entity_category: config
+    disabled_by_default: true
     mode: box
     min_value: -9999
     max_value: 9999
