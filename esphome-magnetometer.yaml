@@ -148,6 +148,10 @@ globals:
     type: bool
     restore_value: false
     initial_value: 'false'
+  - id: ${prefix_id}sensor_alive
+    type: bool
+    restore_value: false
+    initial_value: 'false'
   - id: ${prefix_id}calibrating
     type: bool
     restore_value: false
@@ -472,6 +476,13 @@ text_sensor:
     entity_category: diagnostic
     icon: mdi:swap-horizontal
     update_interval: never
+
+binary_sensor:
+  - platform: template
+    id: ${prefix_id}magnetometer_problem
+    name: ${prefix_name}Magnetometer Problem
+    device_class: problem
+    entity_category: diagnostic
 
 button:
   - platform: template
@@ -828,6 +839,7 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
+              id(${prefix_id}sensor_alive) = true;
               id(${prefix_id}raw_axes)[2] = x;
               if (id(${prefix_id}axis).current_option() == "z") id(${prefix_id}axis_value).publish_state(x);
               if (id(${prefix_id}calibrating)) {
@@ -1063,6 +1075,18 @@ sensor:
     id: ${prefix_id}sensor_total
     name: ${prefix_name}Total
     lambda: |-
+      bool failed = id(${prefix_id}qmc5883l_id).is_failed() || !id(${prefix_id}sensor_alive);
+      id(${prefix_id}magnetometer_problem).publish_state(failed);
+      if (failed) {
+        ESP_LOGW("${prefix_id}recovery", "Magnetometer not responding, attempting recovery...");
+        if (id(${prefix_id}qmc5883l_id).is_failed()) {
+          id(${prefix_id}qmc5883l_id).reset_to_construction_state();
+          id(${prefix_id}qmc5883l_id).call();
+        } else {
+          id(${prefix_id}qmc5883l_id).call_setup();
+        }
+      }
+      id(${prefix_id}sensor_alive) = false;
       float current = id(${prefix_id}half_rotations_total) * id(${prefix_id}volume_per_half_rotation).state
                       + id(${prefix_id}volume_offset);
       // Total is total_increasing: Home Assistant treats a decrease as a meter reset
