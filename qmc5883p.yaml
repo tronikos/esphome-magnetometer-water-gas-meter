@@ -12,5 +12,6 @@ sensor:
   - id: !extend ${prefix_id}qmc5883l_id
     platform: qmc5883p
     address: 0x2C
+    mode: 1
     oversampling: 1x
     temperature: !remove ${prefix_id}qmc5883l_temperature
