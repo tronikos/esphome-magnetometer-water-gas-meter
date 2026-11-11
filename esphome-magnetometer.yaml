@@ -151,7 +151,7 @@ globals:
   - id: ${prefix_id}sensor_alive
     type: bool
     restore_value: false
-    initial_value: 'false'
+    initial_value: 'true'
   - id: ${prefix_id}calibrating
     type: bool
     restore_value: false
