@@ -1007,6 +1007,18 @@ sensor:
                       id(${prefix_id}iv2) = 0;
                       id(${prefix_id}iv0) = dt_step * 4;
                     } else {
+                      // If flow paused long enough to stop since the last step, discard
+                      // pre-pause timestamps so the gap enters the median buffer only once
+                      // instead of dragging down all four initial steps of the new session.
+                      if (id(${prefix_id}iv0) != 0) {
+                        uint32_t step_to = (uint32_t) (2.5f * (id(${prefix_id}iv0) / 4UL));
+                        if (step_to < ${min_silence_seconds} * 1000UL) step_to = ${min_silence_seconds} * 1000UL;
+                        if (step_to > ${max_silence_seconds} * 1000UL) step_to = ${max_silence_seconds} * 1000UL;
+                        if (dt_step > step_to) {
+                          for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
+                          t4 = 0;
+                        }
+                      }
                       // Use the full 4-step (half-rotation) period once 4 steps have
                       // accumulated in the current session so quadrant asymmetry cancels out.
                       uint32_t dt = (t4 != 0) ? (now_ms - t4) : (dt_step * 4);
@@ -1018,8 +1030,9 @@ sensor:
                 }
                 id(${prefix_id}quad_t)[q_idx] = now_ms;
                 id(${prefix_id}last_pulse_ms) = now_ms;
-              } else if (id(${prefix_id}quad_net_max) - net_q >= 2) {
-                if (id(${prefix_id}flow_direction).state != "Reverse") {
+              } else {
+                for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
+                if (id(${prefix_id}quad_net_max) - net_q >= 2 && id(${prefix_id}flow_direction).state != "Reverse") {
                   id(${prefix_id}flow_direction).publish_state("Reverse");
                 }
               }
