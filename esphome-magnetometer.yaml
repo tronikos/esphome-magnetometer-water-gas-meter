@@ -272,6 +272,14 @@ globals:
     type: float[3]
     restore_value: false
     initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}cal_d1
+    type: float[3]
+    restore_value: false
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}cal_d2
+    type: float[3]
+    restore_value: false
+    initial_value: '{0, 0, 0}'
   - id: ${prefix_id}cal_prev
     type: float[3]
     restore_value: false
@@ -281,6 +289,10 @@ globals:
     restore_value: false
     initial_value: '{0, 0, 0}'
   - id: ${prefix_id}cal_sum2
+    type: float[3]
+    restore_value: false
+    initial_value: '{0, 0, 0}'
+  - id: ${prefix_id}cal_d2sum
     type: float[3]
     restore_value: false
     initial_value: '{0, 0, 0}'
@@ -523,6 +535,7 @@ button:
           for (int i = 0; i < 3; i++) {
             id(${prefix_id}cal_sum)[i] = 0.0f;
             id(${prefix_id}cal_sum2)[i] = 0.0f;
+            id(${prefix_id}cal_d2sum)[i] = 0.0f;
             id(${prefix_id}cal_cross)[i] = 0.0f;
             id(${prefix_id}cal_area)[i] = 0.0f;
           }
@@ -583,26 +596,42 @@ button:
           id(${prefix_id}track_max) = NAN;
           id(${prefix_id}track_min) = NAN;
 
-          // Compute 3-axis Quadrature spans and Gram-Schmidt / Maximal-Ratio Combining weights
+          // Compute 3-axis Quadrature spans and Gram-Schmidt / Maximal-Ratio Combining weights.
+          // Second-difference variance (cal_d2sum / 6(N-2)) equals white-noise variance while
+          // preserving coherent magnet sinusoids, preventing pure sensor noise or 0/180-degree
+          // collinear axes from spoofing a quadrature component instead of falling back to Adaptive.
           float inv_n = (id(${prefix_id}cal_n) > 1) ? (1.0f / id(${prefix_id}cal_n)) : 0.0f;
+          float inv_d2 = (id(${prefix_id}cal_n) > 2) ? (1.0f / (6.0f * (id(${prefix_id}cal_n) - 2))) : 0.0f;
           float mean[3] = {
             id(${prefix_id}cal_sum)[0] * inv_n,
             id(${prefix_id}cal_sum)[1] * inv_n,
             id(${prefix_id}cal_sum)[2] * inv_n,
           };
           float var[3];
+          float d2var[3];
           for (int i = 0; i < 3; i++) {
             float v = id(${prefix_id}cal_sum2)[i] * inv_n - mean[i] * mean[i];
             var[i] = (v > 0.0f) ? v : 0.0f;
-            id(${prefix_id}quad_span)[i] = (ranges[i] > 1.0f) ? (roundf(ranges[i] * 10) / 10) : 1.0f;
+            d2var[i] = id(${prefix_id}cal_d2sum)[i] * inv_d2;
             id(${prefix_id}quad_trk_max)[i] = NAN;
             id(${prefix_id}quad_trk_min)[i] = NAN;
+          }
+          float gp = (var[p] > 0.0f) ? fminf(0.5f, d2var[p] / var[p]) : 0.0f;
+          float svar[3];
+          for (int i = 0; i < 3; i++) {
+            svar[i] = (d2var[i] < 0.65f * var[i])
+                ? fmaxf(0.0f, (var[i] - d2var[i]) / (1.0f - gp)) : 0.0f;
+            float nsigma = sqrtf(fmaxf(0.0f, var[i] - svar[i]));
+            float sp = (i == p) ? ranges[i]
+                : fminf(ranges[i], fmaxf(ranges[i] - 3.0f * nsigma,
+                                         2.0f * sqrtf(2.0f * svar[i]) + 2.0f * nsigma));
+            id(${prefix_id}quad_span)[i] = (sp > 1.0f) ? (roundf(sp * 10) / 10) : 1.0f;
           }
           float cov[3][3] = {};
           cov[0][1] = cov[1][0] = id(${prefix_id}cal_cross)[0] * inv_n - mean[0] * mean[1];
           cov[0][2] = cov[2][0] = id(${prefix_id}cal_cross)[1] * inv_n - mean[0] * mean[2];
           cov[1][2] = cov[2][1] = id(${prefix_id}cal_cross)[2] * inv_n - mean[1] * mean[2];
-          // Exact mean-centered shoelace areas via telescoping boundary correction
+          // Mean-centered shoelace areas via telescoping boundary correction
           float area[3][3] = {};
           area[0][1] = id(${prefix_id}cal_area)[0] - mean[0] * id(${prefix_id}cal_prev)[1] + mean[1] * id(${prefix_id}cal_prev)[0];
           area[1][0] = -area[0][1];
@@ -611,36 +640,53 @@ button:
           area[1][2] = id(${prefix_id}cal_area)[2] - mean[1] * id(${prefix_id}cal_prev)[2] + mean[2] * id(${prefix_id}cal_prev)[1];
           area[2][1] = -area[1][2];
 
+          float min_quad_span = min_axis_range * 0.25f;
           float snr[3] = {};
           float denom_q = 0.0f;
           float denom_i = 0.0f;
           float eff_quad_sq = 0.0f;
           for (int i = 0; i < 3; i++) {
-            float rel = (ranges[i] > 0.0f) ? (ranges[i] / max_range_found) : 0.0f;
-            snr[i] = rel * rel;
             if (i == p) {
+              snr[i] = 1.0f;
               id(${prefix_id}quad_c)[i] = 1.0f;
               id(${prefix_id}quad_s)[i] = 0.0f;
-            } else if (ranges[i] >= min_axis_range * 0.25f && var[p] > 0.0f && var[i] > 0.0f) {
-              float r = cov[p][i] / sqrtf(var[p] * var[i]);
-              if (r > 0.98f) r = 0.98f;
-              if (r < -0.98f) r = -0.98f;
-              float s_mag = sqrtf(1.0f - r * r);
-              float s_sign = (area[p][i] >= 0.0f) ? 1.0f : -1.0f;
-              id(${prefix_id}quad_c)[i] = r;
-              id(${prefix_id}quad_s)[i] = s_sign * s_mag;
-              denom_q += snr[i] * s_mag * s_mag;
-              eff_quad_sq += ranges[i] * ranges[i] * s_mag * s_mag;
+            } else if (svar[p] > 0.0f && svar[i] > 0.0f) {
+              float eff_span = fminf(ranges[i], max_range_found * sqrtf(svar[i] / svar[p]));
+              float r = cov[p][i] / sqrtf(svar[p] * svar[i]);
+              // Keep |r| strictly below 1.0f so quad_c[i] == 1.0f uniquely marks primary axis p
+              if (r > 0.9999f) r = 0.9999f;
+              if (r < -0.9999f) r = -0.9999f;
+              float s_mag = sqrtf(fmaxf(0.0f, 1.0f - r * r));
+              float quad_span_i = eff_span * s_mag;
+              float min_area = 0.22f * max_range_found * fmaxf(quad_span_i, min_quad_span);
+              if (eff_span >= min_quad_span && s_mag >= 0.25f &&
+                  quad_span_i >= min_quad_span && fabsf(area[p][i]) >= min_area) {
+                float rel = eff_span / max_range_found;
+                snr[i] = rel * rel;
+                float s_sign = (area[p][i] >= 0.0f) ? 1.0f : -1.0f;
+                id(${prefix_id}quad_c)[i] = r;
+                id(${prefix_id}quad_s)[i] = s_sign * s_mag;
+                denom_q += snr[i] * s_mag * s_mag;
+                eff_quad_sq += quad_span_i * quad_span_i;
+              } else if (eff_span >= min_quad_span && fabsf(r) >= 0.5f) {
+                // Strongly in-phase/anti-phase axis still improves I via Maximal-Ratio Combining
+                float rel = eff_span / max_range_found;
+                snr[i] = rel * rel;
+                id(${prefix_id}quad_c)[i] = r;
+                id(${prefix_id}quad_s)[i] = 0.0f;
+              } else {
+                id(${prefix_id}quad_c)[i] = 0.0f;
+                id(${prefix_id}quad_s)[i] = 0.0f;
+              }
             } else {
               id(${prefix_id}quad_c)[i] = 0.0f;
               id(${prefix_id}quad_s)[i] = 0.0f;
-              snr[i] = 0.0f;
             }
             denom_i += snr[i] * id(${prefix_id}quad_c)[i] * id(${prefix_id}quad_c)[i];
           }
-          bool quad_ok = sqrtf(eff_quad_sq) >= min_axis_range * 0.25f && denom_q > 1e-4f;
+          bool quad_ok = sqrtf(eff_quad_sq) >= min_quad_span && denom_q > 1e-4f;
           for (int i = 0; i < 3; i++) {
-            id(${prefix_id}quad_w)[i] = (i != p && quad_ok)
+            id(${prefix_id}quad_w)[i] = (i != p && quad_ok && id(${prefix_id}quad_s)[i] != 0.0f)
                 ? (snr[i] * id(${prefix_id}quad_s)[i] / denom_q) : 0.0f;
             id(${prefix_id}quad_wi)[i] = (denom_i > 1e-4f)
                 ? (snr[i] * id(${prefix_id}quad_c)[i] / denom_i) : ((i == p) ? 1.0f : 0.0f);
@@ -868,27 +914,40 @@ sensor:
                 if (id(${prefix_id}cal_n) == 0) {
                   for (int i = 0; i < 3; i++) {
                     id(${prefix_id}cal_origin)[i] = id(${prefix_id}raw_axes)[i];
+                    id(${prefix_id}cal_d1)[i] = 0.0f;
+                    id(${prefix_id}cal_d2)[i] = 0.0f;
                     id(${prefix_id}cal_prev)[i] = 0.0f;
                   }
                 }
-                float d0 = id(${prefix_id}raw_axes)[0] - id(${prefix_id}cal_origin)[0];
-                float d1 = id(${prefix_id}raw_axes)[1] - id(${prefix_id}cal_origin)[1];
-                float d2 = id(${prefix_id}raw_axes)[2] - id(${prefix_id}cal_origin)[2];
-                id(${prefix_id}cal_sum)[0] += d0;
-                id(${prefix_id}cal_sum)[1] += d1;
-                id(${prefix_id}cal_sum)[2] += d2;
-                id(${prefix_id}cal_sum2)[0] += d0 * d0;
-                id(${prefix_id}cal_sum2)[1] += d1 * d1;
-                id(${prefix_id}cal_sum2)[2] += d2 * d2;
-                id(${prefix_id}cal_cross)[0] += d0 * d1;
-                id(${prefix_id}cal_cross)[1] += d0 * d2;
-                id(${prefix_id}cal_cross)[2] += d1 * d2;
-                id(${prefix_id}cal_area)[0] += id(${prefix_id}cal_prev)[0] * d1 - d0 * id(${prefix_id}cal_prev)[1];
-                id(${prefix_id}cal_area)[1] += id(${prefix_id}cal_prev)[0] * d2 - d0 * id(${prefix_id}cal_prev)[2];
-                id(${prefix_id}cal_area)[2] += id(${prefix_id}cal_prev)[1] * d2 - d1 * id(${prefix_id}cal_prev)[2];
-                id(${prefix_id}cal_prev)[0] = d0;
-                id(${prefix_id}cal_prev)[1] = d1;
-                id(${prefix_id}cal_prev)[2] = d2;
+                float d[3] = {
+                  id(${prefix_id}raw_axes)[0] - id(${prefix_id}cal_origin)[0],
+                  id(${prefix_id}raw_axes)[1] - id(${prefix_id}cal_origin)[1],
+                  id(${prefix_id}raw_axes)[2] - id(${prefix_id}cal_origin)[2],
+                };
+                if (id(${prefix_id}cal_n) >= 2) {
+                  for (int i = 0; i < 3; i++) {
+                    float dd = d[i] - 2.0f * id(${prefix_id}cal_d1)[i] + id(${prefix_id}cal_d2)[i];
+                    id(${prefix_id}cal_d2sum)[i] += dd * dd;
+                  }
+                }
+                for (int i = 0; i < 3; i++) {
+                  id(${prefix_id}cal_d2)[i] = id(${prefix_id}cal_d1)[i];
+                  id(${prefix_id}cal_d1)[i] = d[i];
+                  id(${prefix_id}cal_sum)[i] += d[i];
+                  id(${prefix_id}cal_sum2)[i] += d[i] * d[i];
+                }
+                id(${prefix_id}cal_cross)[0] += d[0] * d[1];
+                id(${prefix_id}cal_cross)[1] += d[0] * d[2];
+                id(${prefix_id}cal_cross)[2] += d[1] * d[2];
+                float s[3] = {
+                  id(${prefix_id}cal_prev)[0] + 0.35f * (d[0] - id(${prefix_id}cal_prev)[0]),
+                  id(${prefix_id}cal_prev)[1] + 0.35f * (d[1] - id(${prefix_id}cal_prev)[1]),
+                  id(${prefix_id}cal_prev)[2] + 0.35f * (d[2] - id(${prefix_id}cal_prev)[2]),
+                };
+                id(${prefix_id}cal_area)[0] += id(${prefix_id}cal_prev)[0] * s[1] - s[0] * id(${prefix_id}cal_prev)[1];
+                id(${prefix_id}cal_area)[1] += id(${prefix_id}cal_prev)[0] * s[2] - s[0] * id(${prefix_id}cal_prev)[2];
+                id(${prefix_id}cal_area)[2] += id(${prefix_id}cal_prev)[1] * s[2] - s[1] * id(${prefix_id}cal_prev)[2];
+                for (int i = 0; i < 3; i++) id(${prefix_id}cal_prev)[i] = s[i];
                 id(${prefix_id}cal_n) += 1;
               }
               if (id(${prefix_id}detection_algorithm).current_option() != "Quadrature") return;
