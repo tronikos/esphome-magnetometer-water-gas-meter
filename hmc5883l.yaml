@@ -9,4 +9,5 @@ sensor:
     platform: hmc5883l
     address: 0x1E
     oversampling: 1x
+    range: 250µT
     temperature: !remove ${prefix_id}qmc5883l_temperature
