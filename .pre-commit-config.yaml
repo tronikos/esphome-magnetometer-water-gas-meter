@@ -14,4 +14,4 @@ repos:
       - id: codespell
 
 ci:
-  autoupdate_schedule: monthly
+  autoupdate_schedule: quarterly
