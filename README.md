@@ -255,7 +255,7 @@ Algorithm | Best For
 - Works with a single sensor on any multipole magnet (unlike two-sensor setups placed 90° apart around the meter body, which land 180° out of phase on 4-pole magnets; see [Discussion #132](https://github.com/tronikos/esphome-magnetometer-water-gas-meter/discussions/132))
 - Decodes 4 evenly spaced 90° Gray-code steps per cycle: forward motion adds and reverse motion subtracts, so disc rocking from plumbing thermal expansion and contraction cancels out instead of accumulating as phantom usage
 - Commits 1 count per 4 net forward steps (keeping `volume_per_half_rotation` unchanged), clamps published `Total` to its high-water mark so Home Assistant's `total_increasing` statistics never see a decrease as a meter reset, updates `Flow` on every new forward 90° step for 4x faster slow-leak detection, and reports **Flow Direction** (`Forward`, `Reverse`, `Stopped`)
-- Automatically falls back to the 1-axis **Adaptive** algorithm if selected before 3-axis calibration or if secondary axes lack sufficient quadrature signal
+- Automatically falls back to the 1-axis **Adaptive** algorithm if selected before 3-axis calibration, if secondary axes lack sufficient quadrature signal, or if **Axis** is manually changed away from the calibrated primary axis (reporting `Ready (1-axis fallback)` on **Calibration Status**)
 - Requires at least 4 samples per magnetic cycle (vs. 2 for Adaptive), which halves the maximum flow rate ceiling (~33–50 cycles/s at 200 Hz on ESP32, or ~32–47 GPM on a 3/4" Badger 35)
 
 **Adaptive algorithm**:

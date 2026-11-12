@@ -436,10 +436,19 @@ select:
             }
             id(${prefix_id}quad_state) = -1;
             id(${prefix_id}quad_steps) = 0;
+            id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
             if (x == "None") {
               id(${prefix_id}calibration_status).publish_state("Not Calibrated");
             } else if (!id(${prefix_id}calibrating)) {
-              id(${prefix_id}calibration_status).publish_state("Ready");
+              int sel_p = (x == "x") ? 0 : ((x == "y") ? 1 : ((x == "z") ? 2 : -1));
+              bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
+                                (id(${prefix_id}quad_w)[0] != 0.0f ||
+                                 id(${prefix_id}quad_w)[1] != 0.0f ||
+                                 id(${prefix_id}quad_w)[2] != 0.0f);
+              id(${prefix_id}calibration_status).publish_state(
+                  (id(${prefix_id}detection_algorithm).current_option() == "Quadrature" && !quad_ready)
+                      ? "Ready (1-axis fallback)"
+                      : "Ready");
             }
 
   - platform: template
@@ -461,6 +470,16 @@ select:
             id(${prefix_id}quad_state) = -1;
             id(${prefix_id}quad_steps) = 0;
             id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
+            auto cur_axis = id(${prefix_id}axis).current_option();
+            if (!cur_axis.empty() && cur_axis != "None" && !id(${prefix_id}calibrating)) {
+              int sel_p = (cur_axis == "x") ? 0 : ((cur_axis == "y") ? 1 : ((cur_axis == "z") ? 2 : -1));
+              bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
+                                (id(${prefix_id}quad_w)[0] != 0.0f ||
+                                 id(${prefix_id}quad_w)[1] != 0.0f ||
+                                 id(${prefix_id}quad_w)[2] != 0.0f);
+              id(${prefix_id}calibration_status).publish_state(
+                  (x == "Quadrature" && !quad_ready) ? "Ready (1-axis fallback)" : "Ready");
+            }
 
 text_sensor:
   - platform: template
@@ -559,8 +578,6 @@ button:
           float max = maxs[p];
           float max_range_found = ranges[p];
 
-          id(${prefix_id}axis).make_call().set_option(axis_with_largest_range).perform();
-
           // Set magnet span for adaptive algorithm
           id(${prefix_id}magnet_span).make_call().set_value(roundf(max_range_found * 10) / 10).perform();
           id(${prefix_id}track_max) = NAN;
@@ -633,9 +650,8 @@ button:
                      "Insufficient quadrature signal on secondary axes (quad_eff_span=%.2f); falling back to Adaptive",
                      sqrtf(eff_quad_sq));
           }
-          id(${prefix_id}quad_state) = -1;
-          id(${prefix_id}quad_steps) = 0;
-          id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
+          // Set axis after updating quad_c/quad_w so on_value publishes the right Calibration Status
+          id(${prefix_id}axis).make_call().set_option(axis_with_largest_range).perform();
 
           // Set thresholds for threshold-based algorithm
           // ±5 µT of tolerance, scaled from the reference range of 20 (i.e. min_axis_range / 4).
@@ -667,11 +683,15 @@ sensor:
       then:
         - lambda: |-
             // Quadrature is evaluated once per x->y->z burst on the z-axis callback below.
-            // If Quadrature is selected before 3-axis calibration (or secondary axes lack signal),
-            // automatically fall back to 1-axis Adaptive on the selected primary axis.
-            bool quad_ready = id(${prefix_id}quad_w)[0] != 0.0f ||
-                              id(${prefix_id}quad_w)[1] != 0.0f ||
-                              id(${prefix_id}quad_w)[2] != 0.0f;
+            // If Quadrature is selected before 3-axis calibration, secondary axes lack signal,
+            // or Axis was manually changed away from the calibrated primary axis, fall back to
+            // 1-axis Adaptive on the selected axis.
+            auto main_axis = id(${prefix_id}axis).current_option();
+            int sel_p = (main_axis == "x") ? 0 : ((main_axis == "y") ? 1 : ((main_axis == "z") ? 2 : -1));
+            bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
+                              (id(${prefix_id}quad_w)[0] != 0.0f ||
+                               id(${prefix_id}quad_w)[1] != 0.0f ||
+                               id(${prefix_id}quad_w)[2] != 0.0f);
             if (id(${prefix_id}detection_algorithm).current_option() == "Quadrature" && quad_ready) return;
             if (id(${prefix_id}detection_algorithm).current_option() != "Threshold") {
               // === ADAPTIVE ALGORITHM: Min/Max Tracker with Range Clamping ===
@@ -876,7 +896,7 @@ sensor:
                   id(${prefix_id}quad_w)[2] == 0.0f) return;
               auto main_axis = id(${prefix_id}axis).current_option();
               int p = (main_axis == "x") ? 0 : ((main_axis == "y") ? 1 : ((main_axis == "z") ? 2 : -1));
-              if (p < 0) return;
+              if (p < 0 || id(${prefix_id}quad_c)[p] != 1.0f) return;
 
               // 1. Update per-axis Adaptive Min/Max Trackers and normalize all 3 axes to [-1, +1]
               float u[3];
@@ -1133,7 +1153,10 @@ sensor:
       // because Arduino cores define those as function-like macros.
       uint32_t floor_ms = ${min_silence_seconds} * 1000UL;
       uint32_t ceil_ms = ${max_silence_seconds} * 1000UL;
+      auto main_axis = id(${prefix_id}axis).current_option();
+      int sel_p = (main_axis == "x") ? 0 : ((main_axis == "y") ? 1 : ((main_axis == "z") ? 2 : -1));
       bool quad_active = id(${prefix_id}detection_algorithm).current_option() == "Quadrature" &&
+                         sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
                          (id(${prefix_id}quad_w)[0] != 0.0f ||
                           id(${prefix_id}quad_w)[1] != 0.0f ||
                           id(${prefix_id}quad_w)[2] != 0.0f);
