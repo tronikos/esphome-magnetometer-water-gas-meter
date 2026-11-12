@@ -874,7 +874,7 @@ sensor:
               if (id(${prefix_id}detection_algorithm).current_option() != "Quadrature") return;
               if (id(${prefix_id}quad_w)[0] == 0.0f && id(${prefix_id}quad_w)[1] == 0.0f &&
                   id(${prefix_id}quad_w)[2] == 0.0f) return;
-              std::string main_axis = id(${prefix_id}axis).current_option();
+              auto main_axis = id(${prefix_id}axis).current_option();
               int p = (main_axis == "x") ? 0 : ((main_axis == "y") ? 1 : ((main_axis == "z") ? 2 : -1));
               if (p < 0) return;
 
