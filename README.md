@@ -317,7 +317,7 @@ Model | Size | Pulses per gal | Pulses per ft³ | Pulses per L | `volume_per_hal
 170 RCDL | 2" | 14.565 | 108.955 | 3.848 | `0.13731548` gal
 
 The 55 and 70 are both 1", so pick the row by the size stamped on the meter, not by the model.
-For another `volume_unit` divide 2 by the matching column: a 35 RCDL in ft³ is `2 / 947.566`.
+For another `volume_unit` divide 2 by the matching column: a 25 RCDL in ft³ is `2 / 1484.689` (`0.00134708`), and a 35 RCDL in ft³ is `2 / 947.566` (`0.00211067`).
 
 If you have the Flume water sensor you can use its lowest reported value. You can find it with:
 `select min(min) from statistics_short_term, statistics_meta where statistics_meta.statistic_id = 'sensor.water_usage_current' and statistics_meta.id = metadata_id and min > 0;`
