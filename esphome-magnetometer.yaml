@@ -88,18 +88,19 @@ esphome:
             id(${prefix_id}boot_done) = true;
             id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
             auto ax = id(${prefix_id}axis).current_option();
-            if (ax.empty() || ax == "None") {
+            int sel_p = (ax == "x") ? 0 : ((ax == "y") ? 1 : ((ax == "z") ? 2 : -1));
+            id(${prefix_id}active_axis) = sel_p;
+            auto alg = id(${prefix_id}detection_algorithm).current_option();
+            bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
+                              (id(${prefix_id}quad_w)[0] != 0.0f ||
+                               id(${prefix_id}quad_w)[1] != 0.0f ||
+                               id(${prefix_id}quad_w)[2] != 0.0f);
+            id(${prefix_id}active_algo) = (alg == "Threshold") ? 1 : ((alg == "Quadrature" && quad_ready) ? 2 : 0);
+            if (sel_p < 0) {
               id(${prefix_id}calibration_status).publish_state("Not Calibrated");
             } else {
-              int sel_p = (ax == "x") ? 0 : ((ax == "y") ? 1 : ((ax == "z") ? 2 : -1));
-              bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
-                                (id(${prefix_id}quad_w)[0] != 0.0f ||
-                                 id(${prefix_id}quad_w)[1] != 0.0f ||
-                                 id(${prefix_id}quad_w)[2] != 0.0f);
               id(${prefix_id}calibration_status).publish_state(
-                  (id(${prefix_id}detection_algorithm).current_option() == "Quadrature" && !quad_ready)
-                      ? "Ready (1-axis fallback)"
-                      : "Ready");
+                  (alg == "Quadrature" && !quad_ready) ? "Ready (1-axis fallback)" : "Ready");
             }
     # Re-seed adaptive trackers once quad_mid (setup_priority 50) has loaded from flash,
     # since sensors (DATA = 600) start polling while Wi-Fi (250) waits to connect.
@@ -162,6 +163,7 @@ globals:
   - id: ${prefix_id}volume_offset
     type: float
     restore_value: true
+    update_interval: 60s
     initial_value: '0'
 
   # Pulse timing for the flow estimator.
@@ -202,6 +204,16 @@ globals:
     type: bool
     restore_value: false
     initial_value: 'false'
+  # Cached active axis (-1=None, 0=x, 1=y, 2=z) and effective algorithm
+  # (0=Adaptive, 1=Threshold, 2=Quadrature) to avoid 200 Hz string lookups.
+  - id: ${prefix_id}active_axis
+    type: int
+    restore_value: false
+    initial_value: '-1'
+  - id: ${prefix_id}active_algo
+    type: int
+    restore_value: false
+    initial_value: '0'
 
   # TRACKERS for Min/Max Algorithm (initialized to NAN, set on first reading)
   - id: ${prefix_id}track_min
@@ -235,22 +247,27 @@ globals:
   - id: ${prefix_id}quad_span
     type: float[3]
     restore_value: true
+    update_interval: 60s
     initial_value: '{NAN, NAN, NAN}'
   - id: ${prefix_id}quad_c
     type: float[3]
     restore_value: true
+    update_interval: 60s
     initial_value: '{0, 0, 0}'
   - id: ${prefix_id}quad_s
     type: float[3]
     restore_value: true
+    update_interval: 60s
     initial_value: '{0, 0, 0}'
   - id: ${prefix_id}quad_w
     type: float[3]
     restore_value: true
+    update_interval: 60s
     initial_value: '{0, 0, 0}'
   - id: ${prefix_id}quad_wi
     type: float[3]
     restore_value: true
+    update_interval: 60s
     initial_value: '{0, 0, 0}'
   - id: ${prefix_id}quad_i_high
     type: bool
@@ -285,6 +302,7 @@ globals:
   - id: ${prefix_id}quad_total_max
     type: float
     restore_value: true
+    update_interval: 60s
     initial_value: 'NAN'
   # Calibrated per-axis midpoints for seeding adaptive trackers on boot/recalibration.
   # setup_priority 50 allocates this after all existing 800/250/100 preferences so
@@ -293,6 +311,7 @@ globals:
     type: float[3]
     restore_value: true
     setup_priority: 50
+    update_interval: 60s
     initial_value: '{NAN, NAN, NAN}'
   - id: ${prefix_id}volume_per_half_rotation_prev
     type: float
@@ -506,18 +525,19 @@ select:
             if (!id(${prefix_id}boot_done)) return;
             id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
             id(${prefix_id}last_reverse_ms) = 0;
+            int sel_p = (x == "x") ? 0 : ((x == "y") ? 1 : ((x == "z") ? 2 : -1));
+            id(${prefix_id}active_axis) = sel_p;
+            auto alg = id(${prefix_id}detection_algorithm).current_option();
+            bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
+                              (id(${prefix_id}quad_w)[0] != 0.0f ||
+                               id(${prefix_id}quad_w)[1] != 0.0f ||
+                               id(${prefix_id}quad_w)[2] != 0.0f);
+            id(${prefix_id}active_algo) = (alg == "Threshold") ? 1 : ((alg == "Quadrature" && quad_ready) ? 2 : 0);
             if (x == "None") {
               id(${prefix_id}calibration_status).publish_state("Not Calibrated");
             } else if (!id(${prefix_id}calibrating)) {
-              int sel_p = (x == "x") ? 0 : ((x == "y") ? 1 : ((x == "z") ? 2 : -1));
-              bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
-                                (id(${prefix_id}quad_w)[0] != 0.0f ||
-                                 id(${prefix_id}quad_w)[1] != 0.0f ||
-                                 id(${prefix_id}quad_w)[2] != 0.0f);
               id(${prefix_id}calibration_status).publish_state(
-                  (id(${prefix_id}detection_algorithm).current_option() == "Quadrature" && !quad_ready)
-                      ? "Ready (1-axis fallback)"
-                      : "Ready");
+                  (alg == "Quadrature" && !quad_ready) ? "Ready (1-axis fallback)" : "Ready");
             }
 
   - platform: template
@@ -546,13 +566,13 @@ select:
             id(${prefix_id}iv1) = 0;
             id(${prefix_id}iv2) = 0;
             for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
-            auto cur_axis = id(${prefix_id}axis).current_option();
-            if (!cur_axis.empty() && cur_axis != "None" && !id(${prefix_id}calibrating)) {
-              int sel_p = (cur_axis == "x") ? 0 : ((cur_axis == "y") ? 1 : ((cur_axis == "z") ? 2 : -1));
-              bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
-                                (id(${prefix_id}quad_w)[0] != 0.0f ||
-                                 id(${prefix_id}quad_w)[1] != 0.0f ||
-                                 id(${prefix_id}quad_w)[2] != 0.0f);
+            int sel_p = id(${prefix_id}active_axis);
+            bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
+                              (id(${prefix_id}quad_w)[0] != 0.0f ||
+                               id(${prefix_id}quad_w)[1] != 0.0f ||
+                               id(${prefix_id}quad_w)[2] != 0.0f);
+            id(${prefix_id}active_algo) = (x == "Threshold") ? 1 : ((x == "Quadrature" && quad_ready) ? 2 : 0);
+            if (sel_p >= 0 && !id(${prefix_id}calibrating)) {
               id(${prefix_id}calibration_status).publish_state(
                   (x == "Quadrature" && !quad_ready) ? "Ready (1-axis fallback)" : "Ready");
             }
@@ -800,21 +820,16 @@ sensor:
   - platform: template
     id: ${prefix_id}axis_value
     internal: true
+    update_interval: never
     on_value:
       then:
         - lambda: |-
             // Quadrature is evaluated once per x->y->z burst on the z-axis callback below.
-            // If Quadrature is selected before 3-axis calibration, secondary axes lack signal,
-            // or Axis was manually changed away from the calibrated primary axis, fall back to
-            // 1-axis Adaptive on the selected axis.
-            auto main_axis = id(${prefix_id}axis).current_option();
-            int sel_p = (main_axis == "x") ? 0 : ((main_axis == "y") ? 1 : ((main_axis == "z") ? 2 : -1));
-            bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
-                              (id(${prefix_id}quad_w)[0] != 0.0f ||
-                               id(${prefix_id}quad_w)[1] != 0.0f ||
-                               id(${prefix_id}quad_w)[2] != 0.0f);
-            if (id(${prefix_id}detection_algorithm).current_option() == "Quadrature" && quad_ready) return;
-            if (id(${prefix_id}detection_algorithm).current_option() != "Threshold") {
+            // active_algo == 0 when Adaptive is selected or when Quadrature falls back to 1-axis.
+            if (id(${prefix_id}active_algo) == 2) return;
+            int sel_p = id(${prefix_id}active_axis);
+            float upper, lower;
+            if (id(${prefix_id}active_algo) == 0) {
               // === ADAPTIVE ALGORITHM: Min/Max Tracker with Range Clamping ===
 
               // 1. Initialize Trackers if empty (NAN on boot or after calibration)
@@ -855,56 +870,24 @@ sensor:
               float current_span = id(${prefix_id}track_max) - id(${prefix_id}track_min);
 
               if (current_span < min_span) {
-                 float correction = (min_span - current_span) / 2.0;
+                 float correction = (min_span - current_span) * 0.5f;
                  id(${prefix_id}track_max) += correction;
                  id(${prefix_id}track_min) -= correction;
               }
 
               // 5. Calculate Center and Hysteresis (25% of window size)
-              float midpoint = (id(${prefix_id}track_max) + id(${prefix_id}track_min)) / 2.0;
-              float hyst = (id(${prefix_id}track_max) - id(${prefix_id}track_min)) * 0.25;
-
-              // 6. Trigger Logic
-              if (x > (midpoint + hyst) && !id(${prefix_id}axis_value_high)) {
-                id(${prefix_id}axis_value_high) = true;
-                id(${prefix_id}half_rotations_total) += 1;
-                id(${prefix_id}last_reverse_ms) = 0;
-                if (id(${prefix_id}flow_direction).state != "Forward") {
-                  id(${prefix_id}flow_direction).publish_state("Forward");
-                }
-                {
-                  // Record the interval for the flow estimator. The total counter above is
-                  // never gated on this: a rejected bounce must not lose volume.
-                  uint32_t now_ms = millis();
-                  if (id(${prefix_id}last_pulse_ms) != 0) {
-                    uint32_t dt = now_ms - id(${prefix_id}last_pulse_ms);
-                    if (dt >= 10) {  // rejects threshold chatter, still allows ~60 gal/min
-                      if (dt > ${max_silence_seconds} * 1000UL) {
-                        // Flow was already reported as stopped, so the older intervals are no
-                        // longer evidence about the current rate. Keep this gap as the only
-                        // sample rather than dropping it: for a slow leak the gap IS the
-                        // interval, and discarding it would pin Flow at zero forever.
-                        id(${prefix_id}iv1) = 0;
-                        id(${prefix_id}iv2) = 0;
-                        id(${prefix_id}iv0) = dt;
-                      } else {
-                        id(${prefix_id}iv2) = id(${prefix_id}iv1);
-                        id(${prefix_id}iv1) = id(${prefix_id}iv0);
-                        id(${prefix_id}iv0) = dt;
-                      }
-                    }
-                  }
-                  id(${prefix_id}last_pulse_ms) = now_ms;
-                }
-                id(led).turn_on();
-              } else if (x < (midpoint - hyst) && id(${prefix_id}axis_value_high)) {
-                id(${prefix_id}axis_value_high) = false;
-                id(led).turn_off();
-              }
-              return;
+              float midpoint = (id(${prefix_id}track_max) + id(${prefix_id}track_min)) * 0.5f;
+              float hyst = (id(${prefix_id}track_max) - id(${prefix_id}track_min)) * 0.25f;
+              upper = midpoint + hyst;
+              lower = midpoint - hyst;
+            } else {
+              // === THRESHOLD ALGORITHM: Fixed thresholds ===
+              upper = id(${prefix_id}threshold_upper).state;
+              lower = id(${prefix_id}threshold_lower).state;
             }
-            // === THRESHOLD ALGORITHM: Fixed thresholds ===
-            if (x > id(${prefix_id}threshold_upper).state && !id(${prefix_id}axis_value_high)) {
+
+            // Trigger Logic (shared by Adaptive and Threshold)
+            if (x > upper && !id(${prefix_id}axis_value_high)) {
               id(${prefix_id}axis_value_high) = true;
               id(${prefix_id}half_rotations_total) += 1;
               id(${prefix_id}last_reverse_ms) = 0;
@@ -936,7 +919,7 @@ sensor:
                 id(${prefix_id}last_pulse_ms) = now_ms;
               }
               id(led).turn_on();
-            } else if (x < id(${prefix_id}threshold_lower).state && id(${prefix_id}axis_value_high)) {
+            } else if (x < lower && id(${prefix_id}axis_value_high)) {
               id(${prefix_id}axis_value_high) = false;
               id(led).turn_off();
             }
@@ -955,7 +938,9 @@ sensor:
         then:
           - lambda: |-
               id(${prefix_id}raw_axes)[0] = x;
-              if (id(${prefix_id}axis).current_option() == "x") id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}active_axis) == 0 && id(${prefix_id}active_algo) != 2) {
+                id(${prefix_id}axis_value).publish_state(x);
+              }
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_x_min) = min(id(${prefix_id}calibrating_axis_x_min), x);
                 id(${prefix_id}calibrating_axis_x_max) = max(id(${prefix_id}calibrating_axis_x_max), x);
@@ -971,7 +956,9 @@ sensor:
         then:
           - lambda: |-
               id(${prefix_id}raw_axes)[1] = x;
-              if (id(${prefix_id}axis).current_option() == "y") id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}active_axis) == 1 && id(${prefix_id}active_algo) != 2) {
+                id(${prefix_id}axis_value).publish_state(x);
+              }
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_y_min) = min(id(${prefix_id}calibrating_axis_y_min), x);
                 id(${prefix_id}calibrating_axis_y_max) = max(id(${prefix_id}calibrating_axis_y_max), x);
@@ -988,7 +975,9 @@ sensor:
           - lambda: |-
               id(${prefix_id}sensor_alive) = true;
               id(${prefix_id}raw_axes)[2] = x;
-              if (id(${prefix_id}axis).current_option() == "z") id(${prefix_id}axis_value).publish_state(x);
+              if (id(${prefix_id}active_axis) == 2 && id(${prefix_id}active_algo) != 2) {
+                id(${prefix_id}axis_value).publish_state(x);
+              }
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_z_min) = min(id(${prefix_id}calibrating_axis_z_min), x);
                 id(${prefix_id}calibrating_axis_z_max) = max(id(${prefix_id}calibrating_axis_z_max), x);
@@ -1031,16 +1020,14 @@ sensor:
                 for (int i = 0; i < 3; i++) id(${prefix_id}cal_prev)[i] = s[i];
                 id(${prefix_id}cal_n) += 1;
               }
-              if (id(${prefix_id}detection_algorithm).current_option() != "Quadrature") return;
-              if (id(${prefix_id}quad_w)[0] == 0.0f && id(${prefix_id}quad_w)[1] == 0.0f &&
-                  id(${prefix_id}quad_w)[2] == 0.0f) return;
-              auto main_axis = id(${prefix_id}axis).current_option();
-              int p = (main_axis == "x") ? 0 : ((main_axis == "y") ? 1 : ((main_axis == "z") ? 2 : -1));
-              if (p < 0 || id(${prefix_id}quad_c)[p] != 1.0f) return;
+              if (id(${prefix_id}active_algo) != 2) return;
+              int p = id(${prefix_id}active_axis);
+              if (p < 0) return;
 
-              // 1. Update per-axis Adaptive Min/Max Trackers and normalize all 3 axes to [-1, +1]
-              float u[3];
+              // 1. Update per-axis Adaptive Min/Max Trackers and normalize active axes to [-1, +1]
+              float u[3] = {0.0f, 0.0f, 0.0f};
               for (int i = 0; i < 3; i++) {
+                if (i != p && id(${prefix_id}quad_w)[i] == 0.0f && id(${prefix_id}quad_wi)[i] == 0.0f) continue;
                 float val = id(${prefix_id}raw_axes)[i];
                 float span_cfg = id(${prefix_id}quad_span)[i];
                 if (std::isnan(span_cfg) || span_cfg < 1.0f) span_cfg = id(${prefix_id}magnet_span).state;
@@ -1048,10 +1035,10 @@ sensor:
                 float &tmin = id(${prefix_id}quad_trk_min)[i];
                 if (std::isnan(tmax) || std::isnan(tmin)) {
                   float center = std::isnan(id(${prefix_id}quad_mid)[i]) ? val : id(${prefix_id}quad_mid)[i];
-                  tmax = center + span_cfg / 2.0f;
-                  tmin = center - span_cfg / 2.0f;
+                  tmax = center + span_cfg * 0.5f;
+                  tmin = center - span_cfg * 0.5f;
                 }
-                float axis_decay = ${tracker_decay_rate} * (span_cfg / 40.0f);
+                float axis_decay = ${tracker_decay_rate} * (span_cfg * 0.025f);
                 tmax -= axis_decay;
                 tmin += axis_decay;
                 float max_allowed = span_cfg * ${max_span_multiplier};
@@ -1066,13 +1053,13 @@ sensor:
                 float min_span = span_cfg * ${min_span_multiplier};
                 float cur_span = tmax - tmin;
                 if (cur_span < min_span) {
-                  float corr = (min_span - cur_span) / 2.0f;
+                  float corr = (min_span - cur_span) * 0.5f;
                   tmax += corr;
                   tmin -= corr;
                 }
                 // Use trackers only for baseline center; normalize by calibrated span_cfg so
                 // tracker decay (0.8x) or expansion (1.2x) does not distort stationary amplitude.
-                u[i] = 2.0f * (val - (tmax + tmin) / 2.0f) / span_cfg;
+                u[i] = 2.0f * (val - (tmax + tmin) * 0.5f) / span_cfg;
               }
               id(${prefix_id}track_max) = id(${prefix_id}quad_trk_max)[p];
               id(${prefix_id}track_min) = id(${prefix_id}quad_trk_min)[p];
@@ -1090,6 +1077,7 @@ sensor:
               }
 
               // 3. 4-state Gray-code Schmitt-trigger decoder on the orthogonalized (I, Q) circle
+              bool prev_i_high = id(${prefix_id}quad_i_high);
               if (i_val > 0.35f) {
                 id(${prefix_id}quad_i_high) = true;
               } else if (i_val < -0.35f) {
@@ -1119,10 +1107,12 @@ sensor:
               }
               int step = (diff == 1) ? 1 : -1;
               id(${prefix_id}quad_steps) += step;
-              if (id(${prefix_id}quad_i_high)) {
-                id(led).turn_on();
-              } else {
-                id(led).turn_off();
+              if (id(${prefix_id}quad_i_high) != prev_i_high) {
+                if (id(${prefix_id}quad_i_high)) {
+                  id(led).turn_on();
+                } else {
+                  id(led).turn_off();
+                }
               }
 
               // Commit full forward or reverse cycles (4 quadrature steps = 1 half-rotation count)
@@ -1344,14 +1334,7 @@ sensor:
       // also treats the long gap after an idle period as an outlier, so the first
       // pulse of a new session does not drag the rate down. Written without min/max
       // because Arduino cores define those as function-like macros.
-      auto main_axis = id(${prefix_id}axis).current_option();
-      int sel_p = (main_axis == "x") ? 0 : ((main_axis == "y") ? 1 : ((main_axis == "z") ? 2 : -1));
-      bool quad_active = id(${prefix_id}detection_algorithm).current_option() == "Quadrature" &&
-                         sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
-                         (id(${prefix_id}quad_w)[0] != 0.0f ||
-                          id(${prefix_id}quad_w)[1] != 0.0f ||
-                          id(${prefix_id}quad_w)[2] != 0.0f);
-      uint32_t step_scale = quad_active ? 4UL : 1UL;
+      uint32_t step_scale = (id(${prefix_id}active_algo) == 2) ? 4UL : 1UL;
 
       uint32_t a = id(${prefix_id}iv0), b = id(${prefix_id}iv1), c = id(${prefix_id}iv2);
       uint32_t med;

@@ -29,6 +29,14 @@ substitutions:
   flow_update_interval_seconds1: '10'
   flow_update_interval_seconds2: '30'
 
+  # Gas meters rotate far more slowly than water meters; polling meter2 at 20 ms (50 Hz)
+  # instead of 5 ms keeps two 50 kHz I2C buses from saturating the main loop while still
+  # tracking >90 ft³/min on a 0.125 ft³ index. Scale tracker_decay_rate2 proportionally.
+  qmc5883l_update_interval1: '5ms'
+  qmc5883l_update_interval2: '20ms'
+  tracker_decay_rate1: '0.0005'
+  tracker_decay_rate2: '0.002'
+
   # Defaults below mirror esphome-water-meter.yaml (meter1) and
   # esphome-gas-meter.yaml (meter2). Adjust per meter as needed.
   volume_per_half_rotation_initial_value1: '0.01578893'
@@ -57,6 +65,8 @@ packages:
       prefix_id: ${prefix1_id}
       i2c_sda: ${i2c1_sda}
       i2c_scl: ${i2c1_scl}
+      qmc5883l_update_interval: ${qmc5883l_update_interval1}
+      tracker_decay_rate: ${tracker_decay_rate1}
       flow_update_interval_seconds: ${flow_update_interval_seconds1}
       volume_per_half_rotation_initial_value: ${volume_per_half_rotation_initial_value1}
       calibration_minimal_axis_range_initial_value: ${calibration_minimal_axis_range_initial_value1}
@@ -75,6 +85,8 @@ packages:
       prefix_id: ${prefix2_id}
       i2c_sda: ${i2c2_sda}
       i2c_scl: ${i2c2_scl}
+      qmc5883l_update_interval: ${qmc5883l_update_interval2}
+      tracker_decay_rate: ${tracker_decay_rate2}
       flow_update_interval_seconds: ${flow_update_interval_seconds2}
       volume_per_half_rotation_initial_value: ${volume_per_half_rotation_initial_value2}
       calibration_minimal_axis_range_initial_value: ${calibration_minimal_axis_range_initial_value2}
