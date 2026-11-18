@@ -13,6 +13,8 @@ substitutions:
   axis_x_key: 'x_axis'
   axis_y_key: 'y_axis'
   axis_z_key: 'z_axis'
+  # Scale per-sample decay for 10ms polling (2x 5ms) so drift tracking stays ~6 µT/min.
+  tracker_decay_rate: '0.001'
 logger:
   logs:
     mlx90393: INFO
@@ -22,12 +24,21 @@ sensor:
   - id: !extend ${prefix_id}qmc5883l_id
     platform: mlx90393
     address: 0x0C
-    oversampling: 1
-    filter: 5
+    # In ESPHome's mlx90393 component, 5X is highest sensitivity (GAIN_SEL=7)
+    # and DIV_1 gives 0.150/0.242 µT/LSB over ±4915/±7930 µT (vs. 6.01/9.68 µT/LSB
+    # at 1X + DIV_8). oversampling=0 + filter=3 lowers blocking conversion delay
+    # from 17 ms to 2 ms so 10 ms (~100 Hz) polling runs cleanly.
+    gain: 5X
+    oversampling: 0
+    filter: 3
+    update_interval: 10ms
     temperature: !remove ${prefix_id}qmc5883l_temperature
     x_axis:
-      resolution: DIV_8
+      resolution: DIV_1
+      accuracy_decimals: 1
     y_axis:
-      resolution: DIV_8
+      resolution: DIV_1
+      accuracy_decimals: 1
     z_axis:
-      resolution: DIV_8
+      resolution: DIV_1
+      accuracy_decimals: 1

@@ -49,6 +49,8 @@ substitutions:
   axis_x_key: 'field_strength_x'
   axis_y_key: 'field_strength_y'
   axis_z_key: 'field_strength_z'
+  # Drop sensor-specific ADC overflow sentinels below this value (in µT), e.g. HMC5883L -4096.
+  min_valid_field_ut: '-100000'
 
   # Tuning parameters for the Min/Max Tracker algorithm:
   # Decay rate per magnetometer sample (~5ms / 200 Hz on both ESP32 and ESP8266).
@@ -341,6 +343,10 @@ globals:
     type: uint32_t
     restore_value: false
     initial_value: '0'
+  - id: ${prefix_id}cal_burst_ok
+    type: bool
+    restore_value: false
+    initial_value: 'true'
   - id: ${prefix_id}cal_origin
     type: float[3]
     restore_value: false
@@ -937,6 +943,9 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
+              bool ok = (x >= ${min_valid_field_ut});
+              id(${prefix_id}cal_burst_ok) = ok;
+              if (!ok) return;
               id(${prefix_id}raw_axes)[0] = x;
               if (id(${prefix_id}active_axis) == 0 && id(${prefix_id}active_algo) != 2) {
                 id(${prefix_id}axis_value).publish_state(x);
@@ -955,6 +964,10 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
+              if (x < ${min_valid_field_ut}) {
+                id(${prefix_id}cal_burst_ok) = false;
+                return;
+              }
               id(${prefix_id}raw_axes)[1] = x;
               if (id(${prefix_id}active_axis) == 1 && id(${prefix_id}active_algo) != 2) {
                 id(${prefix_id}axis_value).publish_state(x);
@@ -974,6 +987,7 @@ sensor:
         then:
           - lambda: |-
               id(${prefix_id}sensor_alive) = true;
+              if (x < ${min_valid_field_ut}) return;
               id(${prefix_id}raw_axes)[2] = x;
               if (id(${prefix_id}active_axis) == 2 && id(${prefix_id}active_algo) != 2) {
                 id(${prefix_id}axis_value).publish_state(x);
@@ -981,44 +995,46 @@ sensor:
               if (id(${prefix_id}calibrating)) {
                 id(${prefix_id}calibrating_axis_z_min) = min(id(${prefix_id}calibrating_axis_z_min), x);
                 id(${prefix_id}calibrating_axis_z_max) = max(id(${prefix_id}calibrating_axis_z_max), x);
-                if (id(${prefix_id}cal_n) == 0) {
-                  for (int i = 0; i < 3; i++) {
-                    id(${prefix_id}cal_origin)[i] = id(${prefix_id}raw_axes)[i];
-                    id(${prefix_id}cal_d1)[i] = 0.0f;
-                    id(${prefix_id}cal_d2)[i] = 0.0f;
-                    id(${prefix_id}cal_prev)[i] = 0.0f;
+                if (id(${prefix_id}cal_burst_ok)) {
+                  if (id(${prefix_id}cal_n) == 0) {
+                    for (int i = 0; i < 3; i++) {
+                      id(${prefix_id}cal_origin)[i] = id(${prefix_id}raw_axes)[i];
+                      id(${prefix_id}cal_d1)[i] = 0.0f;
+                      id(${prefix_id}cal_d2)[i] = 0.0f;
+                      id(${prefix_id}cal_prev)[i] = 0.0f;
+                    }
                   }
-                }
-                float d[3] = {
-                  id(${prefix_id}raw_axes)[0] - id(${prefix_id}cal_origin)[0],
-                  id(${prefix_id}raw_axes)[1] - id(${prefix_id}cal_origin)[1],
-                  id(${prefix_id}raw_axes)[2] - id(${prefix_id}cal_origin)[2],
-                };
-                if (id(${prefix_id}cal_n) >= 2) {
-                  for (int i = 0; i < 3; i++) {
-                    float dd = d[i] - 2.0f * id(${prefix_id}cal_d1)[i] + id(${prefix_id}cal_d2)[i];
-                    id(${prefix_id}cal_d2sum)[i] += dd * dd;
+                  float d[3] = {
+                    id(${prefix_id}raw_axes)[0] - id(${prefix_id}cal_origin)[0],
+                    id(${prefix_id}raw_axes)[1] - id(${prefix_id}cal_origin)[1],
+                    id(${prefix_id}raw_axes)[2] - id(${prefix_id}cal_origin)[2],
+                  };
+                  if (id(${prefix_id}cal_n) >= 2) {
+                    for (int i = 0; i < 3; i++) {
+                      float dd = d[i] - 2.0f * id(${prefix_id}cal_d1)[i] + id(${prefix_id}cal_d2)[i];
+                      id(${prefix_id}cal_d2sum)[i] += dd * dd;
+                    }
                   }
+                  for (int i = 0; i < 3; i++) {
+                    id(${prefix_id}cal_d2)[i] = id(${prefix_id}cal_d1)[i];
+                    id(${prefix_id}cal_d1)[i] = d[i];
+                    id(${prefix_id}cal_sum)[i] += d[i];
+                    id(${prefix_id}cal_sum2)[i] += d[i] * d[i];
+                  }
+                  id(${prefix_id}cal_cross)[0] += d[0] * d[1];
+                  id(${prefix_id}cal_cross)[1] += d[0] * d[2];
+                  id(${prefix_id}cal_cross)[2] += d[1] * d[2];
+                  float s[3] = {
+                    id(${prefix_id}cal_prev)[0] + 0.35f * (d[0] - id(${prefix_id}cal_prev)[0]),
+                    id(${prefix_id}cal_prev)[1] + 0.35f * (d[1] - id(${prefix_id}cal_prev)[1]),
+                    id(${prefix_id}cal_prev)[2] + 0.35f * (d[2] - id(${prefix_id}cal_prev)[2]),
+                  };
+                  id(${prefix_id}cal_area)[0] += id(${prefix_id}cal_prev)[0] * s[1] - s[0] * id(${prefix_id}cal_prev)[1];
+                  id(${prefix_id}cal_area)[1] += id(${prefix_id}cal_prev)[0] * s[2] - s[0] * id(${prefix_id}cal_prev)[2];
+                  id(${prefix_id}cal_area)[2] += id(${prefix_id}cal_prev)[1] * s[2] - s[1] * id(${prefix_id}cal_prev)[2];
+                  for (int i = 0; i < 3; i++) id(${prefix_id}cal_prev)[i] = s[i];
+                  id(${prefix_id}cal_n) += 1;
                 }
-                for (int i = 0; i < 3; i++) {
-                  id(${prefix_id}cal_d2)[i] = id(${prefix_id}cal_d1)[i];
-                  id(${prefix_id}cal_d1)[i] = d[i];
-                  id(${prefix_id}cal_sum)[i] += d[i];
-                  id(${prefix_id}cal_sum2)[i] += d[i] * d[i];
-                }
-                id(${prefix_id}cal_cross)[0] += d[0] * d[1];
-                id(${prefix_id}cal_cross)[1] += d[0] * d[2];
-                id(${prefix_id}cal_cross)[2] += d[1] * d[2];
-                float s[3] = {
-                  id(${prefix_id}cal_prev)[0] + 0.35f * (d[0] - id(${prefix_id}cal_prev)[0]),
-                  id(${prefix_id}cal_prev)[1] + 0.35f * (d[1] - id(${prefix_id}cal_prev)[1]),
-                  id(${prefix_id}cal_prev)[2] + 0.35f * (d[2] - id(${prefix_id}cal_prev)[2]),
-                };
-                id(${prefix_id}cal_area)[0] += id(${prefix_id}cal_prev)[0] * s[1] - s[0] * id(${prefix_id}cal_prev)[1];
-                id(${prefix_id}cal_area)[1] += id(${prefix_id}cal_prev)[0] * s[2] - s[0] * id(${prefix_id}cal_prev)[2];
-                id(${prefix_id}cal_area)[2] += id(${prefix_id}cal_prev)[1] * s[2] - s[1] * id(${prefix_id}cal_prev)[2];
-                for (int i = 0; i < 3; i++) id(${prefix_id}cal_prev)[i] = s[i];
-                id(${prefix_id}cal_n) += 1;
               }
               if (id(${prefix_id}active_algo) != 2) return;
               int p = id(${prefix_id}active_axis);

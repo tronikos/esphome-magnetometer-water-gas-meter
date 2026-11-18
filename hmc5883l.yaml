@@ -1,4 +1,11 @@
 ---
+substitutions:
+  # HMC5883L reports ADC saturation (positive or negative) as raw -4096
+  # (-622.6 µT at 250µT range, whereas valid 12-bit readings span [-311.3, +311.1] µT).
+  # If you raise `range:` above 250µT, lower this below the new negative full-scale bound.
+  min_valid_field_ut: '-312'
+  # Scale per-sample decay for 14ms polling (~2.8x 5ms) so drift tracking stays ~6 µT/min.
+  tracker_decay_rate: '0.0014'
 logger:
   logs:
     hmc5883l: INFO
@@ -11,3 +18,6 @@ sensor:
     oversampling: 1x
     range: 250µT
     temperature: !remove ${prefix_id}qmc5883l_temperature
+    # HMC5883L max continuous data rate is 75 Hz (13.3 ms); polling faster only
+    # re-reads stale output registers and biases calibration noise estimation.
+    update_interval: 14ms
