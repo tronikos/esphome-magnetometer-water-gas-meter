@@ -83,8 +83,30 @@ esphome:
   # Without setting this, the actual update interval of qmc5883l is: 6ms on ESP32, 10ms on ESP8266.
   # With this, it's 5ms on ESP32, 8ms on ESP8266.
   on_boot:
-    then:
-      - lambda: App.set_loop_interval(0);
+    - then:
+        - lambda: App.set_loop_interval(0);
+    # Run at priority 700: after selects, numbers, and restoring globals (HARDWARE = 800)
+    # have loaded from flash, and before sensors start polling (DATA = 600) or network
+    # components wait on connections, without reordering ESP8266 preference offsets.
+    - priority: 700
+      then:
+        - lambda: |-
+            id(${prefix_id}boot_done) = true;
+            id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
+            auto ax = id(${prefix_id}axis).current_option();
+            if (ax.empty() || ax == "None") {
+              id(${prefix_id}calibration_status).publish_state("Not Calibrated");
+            } else {
+              int sel_p = (ax == "x") ? 0 : ((ax == "y") ? 1 : ((ax == "z") ? 2 : -1));
+              bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
+                                (id(${prefix_id}quad_w)[0] != 0.0f ||
+                                 id(${prefix_id}quad_w)[1] != 0.0f ||
+                                 id(${prefix_id}quad_w)[2] != 0.0f);
+              id(${prefix_id}calibration_status).publish_state(
+                  (id(${prefix_id}detection_algorithm).current_option() == "Quadrature" && !quad_ready)
+                      ? "Ready (1-axis fallback)"
+                      : "Ready");
+            }
 
 logger:
   level: INFO
@@ -153,6 +175,10 @@ globals:
     restore_value: false
     initial_value: 'true'
   - id: ${prefix_id}calibrating
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: ${prefix_id}boot_done
     type: bool
     restore_value: false
     initial_value: 'false'
@@ -448,6 +474,7 @@ select:
             }
             id(${prefix_id}quad_state) = -1;
             id(${prefix_id}quad_steps) = 0;
+            if (!id(${prefix_id}boot_done)) return;
             id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
             if (x == "None") {
               id(${prefix_id}calibration_status).publish_state("Not Calibrated");
@@ -481,6 +508,7 @@ select:
         - lambda: |-
             id(${prefix_id}quad_state) = -1;
             id(${prefix_id}quad_steps) = 0;
+            if (!id(${prefix_id}boot_done)) return;
             id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
             auto cur_axis = id(${prefix_id}axis).current_option();
             if (!cur_axis.empty() && cur_axis != "None" && !id(${prefix_id}calibrating)) {
