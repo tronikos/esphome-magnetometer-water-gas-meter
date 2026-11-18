@@ -107,6 +107,28 @@ esphome:
                       ? "Ready (1-axis fallback)"
                       : "Ready");
             }
+    # Re-seed adaptive trackers once quad_mid (setup_priority 50) has loaded from flash,
+    # since sensors (DATA = 600) start polling while Wi-Fi (250) waits to connect.
+    - priority: 40
+      then:
+        - lambda: |-
+            if (std::isnan(id(${prefix_id}quad_mid)[0]) &&
+                std::isnan(id(${prefix_id}quad_mid)[1]) &&
+                std::isnan(id(${prefix_id}quad_mid)[2])) {
+              return;
+            }
+            if (id(${prefix_id}last_pulse_ms) == 0 && id(${prefix_id}quad_steps) == 0 && !id(${prefix_id}calibrating)) {
+              id(${prefix_id}track_max) = NAN;
+              id(${prefix_id}track_min) = NAN;
+              for (int i = 0; i < 3; i++) {
+                id(${prefix_id}quad_trk_max)[i] = NAN;
+                id(${prefix_id}quad_trk_min)[i] = NAN;
+              }
+              id(${prefix_id}quad_state) = -1;
+              id(${prefix_id}quad_i_high) = false;
+              id(${prefix_id}quad_q_high) = false;
+              id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
+            }
 
 logger:
   level: INFO
@@ -266,6 +288,14 @@ globals:
     type: float
     restore_value: true
     initial_value: 'NAN'
+  # Calibrated per-axis midpoints for seeding adaptive trackers on boot/recalibration.
+  # setup_priority 50 allocates this after all existing 800/250/100 preferences so
+  # ESP8266 sequential flash preference offsets remain unchanged on upgrade.
+  - id: ${prefix_id}quad_mid
+    type: float[3]
+    restore_value: true
+    setup_priority: 50
+    initial_value: '{NAN, NAN, NAN}'
   - id: ${prefix_id}volume_per_half_rotation_prev
     type: float
     restore_value: false
@@ -641,6 +671,7 @@ button:
             float v = id(${prefix_id}cal_sum2)[i] * inv_n - mean[i] * mean[i];
             var[i] = (v > 0.0f) ? v : 0.0f;
             d2var[i] = id(${prefix_id}cal_d2sum)[i] * inv_d2;
+            id(${prefix_id}quad_mid)[i] = (mins[i] + maxs[i]) / 2.0f;
             id(${prefix_id}quad_trk_max)[i] = NAN;
             id(${prefix_id}quad_trk_min)[i] = NAN;
           }
@@ -772,8 +803,12 @@ sensor:
 
               // 1. Initialize Trackers if empty (NAN on boot or after calibration)
               if (std::isnan(id(${prefix_id}track_max)) || std::isnan(id(${prefix_id}track_min))) {
-                 id(${prefix_id}track_max) = x + (id(${prefix_id}magnet_span).state / 2.0);
-                 id(${prefix_id}track_min) = x - (id(${prefix_id}magnet_span).state / 2.0);
+                 float center = (sel_p >= 0 && !std::isnan(id(${prefix_id}quad_mid)[sel_p]))
+                                    ? id(${prefix_id}quad_mid)[sel_p] : x;
+                 float span = id(${prefix_id}magnet_span).state;
+                 id(${prefix_id}track_max) = center + (span * 0.5f);
+                 id(${prefix_id}track_min) = center - (span * 0.5f);
+                 id(${prefix_id}axis_value_high) = (x > center + span * (${min_span_multiplier} * 0.25f));
               }
 
               // 2. Linear Decay (Very Slow) - pulls max down and min up to follow thermal drift
@@ -994,8 +1029,9 @@ sensor:
                 float &tmax = id(${prefix_id}quad_trk_max)[i];
                 float &tmin = id(${prefix_id}quad_trk_min)[i];
                 if (std::isnan(tmax) || std::isnan(tmin)) {
-                  tmax = val + span_cfg / 2.0f;
-                  tmin = val - span_cfg / 2.0f;
+                  float center = std::isnan(id(${prefix_id}quad_mid)[i]) ? val : id(${prefix_id}quad_mid)[i];
+                  tmax = center + span_cfg / 2.0f;
+                  tmin = center - span_cfg / 2.0f;
                 }
                 float axis_decay = ${tracker_decay_rate} * (span_cfg / 40.0f);
                 tmax -= axis_decay;
@@ -1016,7 +1052,9 @@ sensor:
                   tmax += corr;
                   tmin -= corr;
                 }
-                u[i] = 2.0f * (val - (tmax + tmin) / 2.0f) / (tmax - tmin);
+                // Use trackers only for baseline center; normalize by calibrated span_cfg so
+                // tracker decay (0.8x) or expansion (1.2x) does not distort stationary amplitude.
+                u[i] = 2.0f * (val - (tmax + tmin) / 2.0f) / span_cfg;
               }
               id(${prefix_id}track_max) = id(${prefix_id}quad_trk_max)[p];
               id(${prefix_id}track_min) = id(${prefix_id}quad_trk_min)[p];
