@@ -176,6 +176,10 @@ globals:
     type: uint32_t
     restore_value: false
     initial_value: '0'
+  - id: ${prefix_id}last_reverse_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
   - id: ${prefix_id}iv0
     type: uint32_t
     restore_value: false
@@ -506,6 +510,7 @@ select:
             id(${prefix_id}quad_steps) = 0;
             if (!id(${prefix_id}boot_done)) return;
             id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
+            id(${prefix_id}last_reverse_ms) = 0;
             if (x == "None") {
               id(${prefix_id}calibration_status).publish_state("Not Calibrated");
             } else if (!id(${prefix_id}calibrating)) {
@@ -540,6 +545,12 @@ select:
             id(${prefix_id}quad_steps) = 0;
             if (!id(${prefix_id}boot_done)) return;
             id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
+            id(${prefix_id}last_pulse_ms) = 0;
+            id(${prefix_id}last_reverse_ms) = 0;
+            id(${prefix_id}iv0) = 0;
+            id(${prefix_id}iv1) = 0;
+            id(${prefix_id}iv2) = 0;
+            for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
             auto cur_axis = id(${prefix_id}axis).current_option();
             if (!cur_axis.empty() && cur_axis != "None" && !id(${prefix_id}calibrating)) {
               int sel_p = (cur_axis == "x") ? 0 : ((cur_axis == "y") ? 1 : ((cur_axis == "z") ? 2 : -1));
@@ -852,6 +863,7 @@ sensor:
               if (x > (midpoint + hyst) && !id(${prefix_id}axis_value_high)) {
                 id(${prefix_id}axis_value_high) = true;
                 id(${prefix_id}half_rotations_total) += 1;
+                id(${prefix_id}last_reverse_ms) = 0;
                 if (id(${prefix_id}flow_direction).state != "Forward") {
                   id(${prefix_id}flow_direction).publish_state("Forward");
                 }
@@ -890,6 +902,7 @@ sensor:
             if (x > id(${prefix_id}threshold_upper).state && !id(${prefix_id}axis_value_high)) {
               id(${prefix_id}axis_value_high) = true;
               id(${prefix_id}half_rotations_total) += 1;
+              id(${prefix_id}last_reverse_ms) = 0;
               if (id(${prefix_id}flow_direction).state != "Forward") {
                 id(${prefix_id}flow_direction).publish_state("Forward");
               }
@@ -1095,7 +1108,10 @@ sensor:
               int diff = (phase - id(${prefix_id}quad_state)) & 3;
               if (diff == 0) return;
               id(${prefix_id}quad_state) = phase;
-              if (diff == 2) return;
+              if (diff == 2) {
+                for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
+                return;
+              }
               int step = (diff == 1) ? 1 : -1;
               id(${prefix_id}quad_steps) += step;
               if (id(${prefix_id}quad_i_high)) {
@@ -1117,6 +1133,7 @@ sensor:
               long net_q = (long) id(${prefix_id}half_rotations_total) * 4L + id(${prefix_id}quad_steps);
               if (net_q > id(${prefix_id}quad_net_max)) {
                 id(${prefix_id}quad_net_max) = net_q;
+                id(${prefix_id}last_reverse_ms) = 0;
                 if (id(${prefix_id}flow_direction).state != "Forward") {
                   id(${prefix_id}flow_direction).publish_state("Forward");
                 }
@@ -1126,17 +1143,28 @@ sensor:
                 if (id(${prefix_id}last_pulse_ms) != 0) {
                   uint32_t dt_step = now_ms - id(${prefix_id}last_pulse_ms);
                   if (dt_step >= 3) {
+                    uint32_t scaled_step = (dt_step > 1073741823UL) ? 4294967295UL : (dt_step * 4UL);
                     if (dt_step > ${max_silence_seconds} * 1000UL) {
                       for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
                       id(${prefix_id}iv1) = 0;
                       id(${prefix_id}iv2) = 0;
-                      id(${prefix_id}iv0) = dt_step * 4;
+                      id(${prefix_id}iv0) = scaled_step;
                     } else {
                       // If flow paused long enough to stop since the last step, discard
                       // pre-pause timestamps so the gap enters the median buffer only once
                       // instead of dragging down all four initial steps of the new session.
                       if (id(${prefix_id}iv0) != 0) {
-                        uint32_t step_to = (uint32_t) (2.5f * (id(${prefix_id}iv0) / 4UL));
+                        uint32_t a = id(${prefix_id}iv0), b = id(${prefix_id}iv1), c = id(${prefix_id}iv2);
+                        uint32_t ref = a;
+                        if (b != 0 && c != 0) {
+                          uint32_t lo = (a < b) ? a : b;
+                          uint32_t hi = (a < b) ? b : a;
+                          ref = (c < lo) ? lo : ((c > hi) ? hi : c);
+                        }
+                        if (b <= ${max_silence_seconds} * 4000UL && b > ref && b / 4UL <= ref) ref = b;
+                        uint32_t ref_step = ref / 4UL;
+                        uint32_t step_to = (ref_step >= ${max_silence_seconds} * 1000UL)
+                            ? (${max_silence_seconds} * 1000UL) : (uint32_t) (2.5f * ref_step);
                         if (step_to < ${min_silence_seconds} * 1000UL) step_to = ${min_silence_seconds} * 1000UL;
                         if (step_to > ${max_silence_seconds} * 1000UL) step_to = ${max_silence_seconds} * 1000UL;
                         if (dt_step > step_to) {
@@ -1146,7 +1174,7 @@ sensor:
                       }
                       // Use the full 4-step (half-rotation) period once 4 steps have
                       // accumulated in the current session so quadrant asymmetry cancels out.
-                      uint32_t dt = (t4 != 0) ? (now_ms - t4) : (dt_step * 4);
+                      uint32_t dt = (t4 != 0) ? (now_ms - t4) : scaled_step;
                       id(${prefix_id}iv2) = id(${prefix_id}iv1);
                       id(${prefix_id}iv1) = id(${prefix_id}iv0);
                       id(${prefix_id}iv0) = dt;
@@ -1157,8 +1185,14 @@ sensor:
                 id(${prefix_id}last_pulse_ms) = now_ms;
               } else {
                 for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
-                if (id(${prefix_id}quad_net_max) - net_q >= 2 && id(${prefix_id}flow_direction).state != "Reverse") {
-                  id(${prefix_id}flow_direction).publish_state("Reverse");
+                if (id(${prefix_id}quad_net_max) - net_q >= 2) {
+                  if (step < 0) {
+                    uint32_t rev_ms = millis();
+                    id(${prefix_id}last_reverse_ms) = rev_ms ? rev_ms : 1UL;
+                  }
+                  if (id(${prefix_id}flow_direction).state != "Reverse") {
+                    id(${prefix_id}flow_direction).publish_state("Reverse");
+                  }
                 }
               }
       filters:
@@ -1272,13 +1306,19 @@ sensor:
     icon: mdi:speedometer
     lambda: |-
       const float vol = id(${prefix_id}volume_per_half_rotation).state;
+      uint32_t floor_ms = ${min_silence_seconds} * 1000UL;
+      uint32_t ceil_ms = ${max_silence_seconds} * 1000UL;
+      uint32_t now_ms = millis();
+      bool reversing = id(${prefix_id}last_reverse_ms) != 0 &&
+                       (now_ms - id(${prefix_id}last_reverse_ms)) <= floor_ms;
+      if (!reversing) id(${prefix_id}last_reverse_ms) = 0;
 
       // Rate from the median time between half rotations. Counting pulses in a fixed
       // window cannot express a rate below one count per window, and on a coarse gas
       // index, where one count can be worth a couple of ft3, that floor sits above
       // the steady draw of every residential appliance.
       if (id(${prefix_id}last_pulse_ms) == 0 || id(${prefix_id}iv0) == 0) {
-        if (id(${prefix_id}flow_direction).state != "Stopped") {
+        if (!reversing && id(${prefix_id}flow_direction).state != "Stopped") {
           id(${prefix_id}flow_direction).publish_state("Stopped");
         }
         return 0.0f;
@@ -1289,8 +1329,6 @@ sensor:
       // also treats the long gap after an idle period as an outlier, so the first
       // pulse of a new session does not drag the rate down. Written without min/max
       // because Arduino cores define those as function-like macros.
-      uint32_t floor_ms = ${min_silence_seconds} * 1000UL;
-      uint32_t ceil_ms = ${max_silence_seconds} * 1000UL;
       auto main_axis = id(${prefix_id}axis).current_option();
       int sel_p = (main_axis == "x") ? 0 : ((main_axis == "y") ? 1 : ((main_axis == "z") ? 2 : -1));
       bool quad_active = id(${prefix_id}detection_algorithm).current_option() == "Quadrature" &&
@@ -1320,16 +1358,24 @@ sensor:
       // (shower throttled to a trickle) being mistaken for a stop; the ceiling bounds
       // how long Flow lingers so automations keyed on zero still fire. In Quadrature
       // mode, pulses arrive every quarter-cycle (med / 4).
-      uint32_t timeout = (uint32_t)(2.5f * (med / step_scale));
+      uint32_t step_iv = med / step_scale;
+      uint32_t timeout = (step_iv >= ceil_ms) ? ceil_ms : (uint32_t) (2.5f * step_iv);
       if (timeout < floor_ms) timeout = floor_ms;
       if (timeout > ceil_ms) timeout = ceil_ms;
 
-      // Display decision only: report zero when silent, but never clear the interval
-      // buffer. Intervals longer than the timeout are still measured, so a slow leak
-      // keeps reporting its real rate instead of being stuck at zero forever.
-      uint32_t elapsed = millis() - id(${prefix_id}last_pulse_ms);
+      // Display decision only: report zero when silent, but keep the interval buffer
+      // for up to 7 days so slow leaks with multi-minute/hour gaps still measure their
+      // real rate without risking 32-bit millis() wraparound (~49.7 days).
+      uint32_t elapsed = now_ms - id(${prefix_id}last_pulse_ms);
+      if (elapsed > 604800000UL) {
+        id(${prefix_id}last_pulse_ms) = 0;
+        id(${prefix_id}iv0) = 0;
+        id(${prefix_id}iv1) = 0;
+        id(${prefix_id}iv2) = 0;
+        for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
+      }
       if (elapsed > timeout) {
-        if (id(${prefix_id}flow_direction).state != "Stopped") {
+        if (!reversing && id(${prefix_id}flow_direction).state != "Stopped") {
           id(${prefix_id}flow_direction).publish_state("Stopped");
         }
         return 0.0f;
