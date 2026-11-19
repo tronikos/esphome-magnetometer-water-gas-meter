@@ -1,0 +1,27 @@
+---
+# WARNING: Enabling QMC5883L temperature adds a second I2C register read on
+# every 5 ms magnetometer poll (~4.56 ms vs. ~2.64 ms at 50 kHz), cutting loop
+# headroom, reducing maximum trackable flow rate on two-meter configs or 10 kHz
+# buses, and discarding that magnetic sample if the temperature read fails.
+# QMC5883L's die temperature register is also factory-uncalibrated (it measures
+# relative change only and requires manual offset adjustment).
+#
+# Targets single-meter QMC5883L configs (esphome-water-meter.yaml / esphome-gas-meter.yaml).
+number:
+  - id: !extend ${prefix_id}temperature_offset
+    internal: false
+
+sensor:
+  - id: !extend ${prefix_id}qmc5883l_id
+    temperature:
+      id: ${prefix_id}qmc5883l_temperature
+      name: ${prefix_name}Temperature
+      filters:
+        - sliding_window_moving_average:
+            window_size: 3000
+            send_every: 3000
+            send_first_at: 1
+        - lambda: "return x + id(${prefix_id}temperature_offset).state;"
+        - or:
+            - throttle: 300s
+            - delta: 0.5

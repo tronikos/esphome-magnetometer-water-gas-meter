@@ -387,8 +387,19 @@ consumption. Correct it in **Settings** > **Tools** > **Statistics** > "Adjust a
 
 ### Temperature
 
-Only supported if you are using a QMC5883L.
-Place another temperature sensor next to the QMC5883L and adjust the temperature offset so that they match.
+QMC5883L's relative die temperature sensor and `Temperature Offset` are omitted by default so
+every 5 ms magnetometer poll does not perform a second I2C register read (which cuts loop
+headroom, reduces sample rate on two-meter setups or `10kHz` buses, and drops a magnetic sample
+on a transient temperature read error).
+
+If you are using a QMC5883L and still want to expose it, include `qmc5883l-temperature.yaml` in
+your package `files` list (`files: [esphome-water-meter.yaml, qmc5883l-temperature.yaml]`), then
+enable `Temperature Offset` in Home Assistant and adjust it against a nearby thermometer.
+
+> **Upgrading:** existing QMC5883L installations will no longer expose `Temperature` or
+> `Temperature Offset` by default after updating (any orphaned unavailable entities in Home
+> Assistant can be deleted, or restored by adding `qmc5883l-temperature.yaml` above; stored
+> calibration, settings, and `Total` are preserved on both ESP8266 and ESP32).
 
 ## Home Assistant Integration Examples
 

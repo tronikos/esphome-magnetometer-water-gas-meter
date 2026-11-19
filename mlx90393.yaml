@@ -32,7 +32,6 @@ sensor:
     oversampling: 0
     filter: 3
     update_interval: 10ms
-    temperature: !remove ${prefix_id}qmc5883l_temperature
     x_axis:
       resolution: DIV_1
       accuracy_decimals: 1

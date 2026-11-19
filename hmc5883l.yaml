@@ -17,7 +17,6 @@ sensor:
     address: 0x1E
     oversampling: 1x
     range: 250µT
-    temperature: !remove ${prefix_id}qmc5883l_temperature
     # HMC5883L max continuous data rate is 75 Hz (13.3 ms); polling faster only
     # re-reads stale output registers and biases calibration noise estimation.
     update_interval: 14ms

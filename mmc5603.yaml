@@ -12,7 +12,6 @@ sensor:
     platform: mmc5603
     address: 0x30
     oversampling: !remove
-    temperature: !remove ${prefix_id}qmc5883l_temperature
     # ESPHome's mmc5603 driver issues 11 separate 1-byte I2C transfers per poll (~10 ms
     # at 50 kHz); polling faster pegs the I2C bus continuously with no loop headroom.
     update_interval: 12ms

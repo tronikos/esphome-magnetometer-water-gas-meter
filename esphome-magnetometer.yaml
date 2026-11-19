@@ -408,9 +408,13 @@ number:
             }
             id(${prefix_id}volume_per_half_rotation_prev) = x;
 
+  # Kept internal with restore_value: true so omitting QMC5883L's per-poll temperature
+  # sensor does not shift sequential ESP8266 flash preference offsets on upgrade, and so
+  # qmc5883l-temperature.yaml can unhide it in place via !extend without shifting offsets.
   - platform: template
     id: ${prefix_id}temperature_offset
     name: ${prefix_name}Temperature Offset
+    internal: true
     unit_of_measurement: '°C'
     min_value: -100
     max_value: 100
@@ -1208,17 +1212,6 @@ sensor:
               }
       filters:
         - delta: ${magnetic_field_update_delta}
-    temperature:
-      id: ${prefix_id}qmc5883l_temperature
-      name: ${prefix_name}Temperature
-      filters:
-        - lambda: "return x + id(${prefix_id}temperature_offset).state;"
-        - sliding_window_moving_average:
-            window_size: 3000
-            send_every: 3000
-        - or:
-            - throttle: 300s
-            - delta: 0.5
     oversampling: ${qmc5883l_oversampling}
     update_interval: ${qmc5883l_update_interval}
 
