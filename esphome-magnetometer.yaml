@@ -51,9 +51,8 @@ substitutions:
   axis_z_key: 'field_strength_z'
 
   # Tuning parameters for the Min/Max Tracker algorithm:
-  # Decay rate per axis_value update, whose rate is MCU-dependent (see the esphome:
-  # comment below): 5ms on ESP32, 8ms on ESP8266. Controls how fast the tracker
-  # follows thermal drift. 0.0005 = ~6 µT/min on ESP32, ~3.75 µT/min on ESP8266.
+  # Decay rate per magnetometer sample (~5ms / 200 Hz on both ESP32 and ESP8266).
+  # Controls how fast the tracker follows thermal drift (~6 µT/min at 200 Hz).
   # Increase if you see false triggers from temperature changes.
   tracker_decay_rate: '0.0005'
   # Minimum span as fraction of calibrated magnet_span. Keeps the detection window
@@ -78,13 +77,8 @@ substitutions:
   calibration_seconds_initial_value: '5'
 
 esphome:
-  min_version: "2026.1.0"
-  # Default loop interval is 16ms. Setting it to 0 to make updates faster.
-  # Without setting this, the actual update interval of qmc5883l is: 6ms on ESP32, 10ms on ESP8266.
-  # With this, it's 5ms on ESP32, 8ms on ESP8266.
+  min_version: "2026.5.0"
   on_boot:
-    - then:
-        - lambda: App.set_loop_interval(0);
     # Run at priority 700: after selects, numbers, and restoring globals (HARDWARE = 800)
     # have loaded from flash, and before sensors start polling (DATA = 600) or network
     # components wait on connections, without reordering ESP8266 preference offsets.
