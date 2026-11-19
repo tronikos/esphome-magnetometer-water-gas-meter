@@ -123,7 +123,7 @@ The ethernet cable has 4 twisted pairs of wires. Use any solid wire color for th
 2. In the **ESPHome Dashboard** select **New device**, **Continue**, give a name: e.g. Water meter, **Next**, select device type based on the ESP chip used e.g. ESP8266.
 3. In the **Configuration created!** page select **Skip** to skip installation for now until we make a few changes.
 4. Select **Edit** on the created configuration e.g. water-meter.yaml.
-5. Skip this step if you used an `esp32`. Change `esp8266` section to:
+5. Add `preferences: flash_write_interval: 60min` (recommended on both `esp8266` and `esp32` to reduce flash wear; ESPHome defaults to `60s`). If you used an `esp8266`, also enable `restore_from_flash: true`:
 
     ```yaml
     esp8266:
@@ -256,7 +256,13 @@ Algorithm | Best For
 - Decodes 4 evenly spaced 90° Gray-code steps per cycle: forward motion adds and reverse motion subtracts, so disc rocking from plumbing thermal expansion and contraction cancels out instead of accumulating as phantom usage
 - Commits 1 count per 4 net forward steps (keeping `volume_per_half_rotation` unchanged), clamps published `Total` to its high-water mark so Home Assistant's `total_increasing` statistics never see a decrease as a meter reset, updates `Flow` on every new forward 90° step for 4x faster slow-leak detection, and reports **Flow Direction** (`Forward`, `Reverse`, `Stopped`)
 - Automatically falls back to the 1-axis **Adaptive** algorithm if selected before 3-axis calibration, if secondary axes lack sufficient quadrature signal, or if **Axis** is manually changed away from the calibrated primary axis (reporting `Ready (1-axis fallback)` on **Calibration Status**)
-- Requires at least 4 samples per magnetic cycle (vs. 2 for Adaptive), which halves the maximum flow rate ceiling (~33–50 cycles/s at 200 Hz on ESP32 with QMC5883L/QMC5883P, or ~32–47 GPM on a 3/4" Badger 35; sensors with lower output rates such as HMC5883L at 75 Hz max or MLX90393 at ~65 Hz scale this ceiling down proportionally)
+- Requires at least 4 samples per magnetic cycle (vs. 2 for Adaptive), which halves the maximum flow rate ceiling (~33–50 cycles/s at 200 Hz on ESP32 with QMC5883L/QMC5883P, or ~32–47 GPM on a 3/4" Badger 35; sensors with lower output rates such as MLX90393 at ~100 Hz, MMC5603 at ~85 Hz, or HMC5883L at ~71 Hz, or buses lowered to `i2c_frequency: 10kHz`, scale this ceiling down proportionally)
+
+> **Upgrading:** the "Detection algorithm" select uses `restore_value: true`, so existing
+> installations keep their previously stored algorithm (`Adaptive` or `Threshold`) after
+> updating. To switch an existing device to `Quadrature`, select **Quadrature** in Home
+> Assistant and run **Calibrate axis** once so all three axes and their phase correlations
+> are recorded.
 
 **Adaptive algorithm**:
 
@@ -372,6 +378,13 @@ rescales the volume that was actually counted.
 Total is `total_increasing`, so raising it lands in your statistics as one huge hour of
 consumption. Correct it in **Settings** > **Tools** > **Statistics** > "Adjust a statistic".
 
+> **Note on floating-point precision:** ESPHome publishes sensor states as 32-bit floats
+> (~7 significant decimal digits, exact integer resolution up to 16,777,216). Once `Total`
+> reaches hundreds of thousands of `gal` or `L` — either after years of accumulation or via
+> `set_total` anchoring to a 6–7 digit physical register — per-step rounding exceeds `0.01`.
+> If single-pulse resolution on `Total` matters, avoid anchoring to large register offsets in
+> small units (`L`, `gal`), or use a larger `volume_unit` (`ft³`, `m³`).
+
 ### Temperature
 
 Only supported if you are using a QMC5883L.
@@ -383,7 +396,7 @@ Place another temperature sensor next to the QMC5883L and adjust the temperature
 
 ### Water Running Too Long Alert
 
-In `Settings > Devices & services > Helpers` I have created a template sensor: `sensor.water_meter_flow_minus_irrigation` with the following state template: `{{ max(0, states('sensor.water_meter_flow') | float - (0.44 if now().hour in range(7, 10) else 0)) }}`. My irrigation system consumes 0.44 gal/min between 7 to 9 am or 8 to 10 am depending on DST. You will need to adjust this to your irrigation system flow and times. If you don't have irrigation you can skip this and use `sensor.water_meter_flow` below.
+In `Settings > Devices & services > Helpers` I have created a template sensor: `sensor.water_meter_flow_minus_irrigation` with the following state template: `{{ max(0, states('sensor.water_meter_flow') | float(0) - (0.44 if now().hour in range(7, 10) else 0)) }}`. My irrigation system consumes 0.44 gal/min between 7 to 9 am or 8 to 10 am depending on DST. You will need to adjust this to your irrigation system flow and times. If you don't have irrigation you can skip this and use `sensor.water_meter_flow` below.
 
 I have also created a template **binary sensor**, `binary_sensor.water_meter_running_minus_irrigation`, with the state template `{{ states('sensor.water_meter_flow_minus_irrigation') | float(0) > 0 }}` and **no delay off**. The automation below reads its `last_changed` to know how long water has been running. Do not add a delay off unless you have measured your own usage: bridging the gaps between separate draws merges them into one long session and causes false alerts.
 
@@ -453,7 +466,7 @@ actions:
             title: "💧 Alert: Water Flow"
             message: >-
               {% set total = as_timestamp(now()) - start_ts %}
-              Water flow is {{ states('sensor.water_meter_flow') | round(1) }} gallons per minute.
+              Water flow is {{ states('sensor.water_meter_flow') | float(0) | round(1) }} gallons per minute.
               Water has now been running for {{ (total / 60) | round(0) }} minutes.
             data:
               tag: water-flow-alert
@@ -532,7 +545,8 @@ all_corrected_states AS (
     last_updated_ts,
     CASE
       -- If the state's timestamp falls within the irrigation window, reduce its value.
-      WHEN STRFTIME('%H:%M', last_updated_ts, 'unixepoch', 'localtime') BETWEEN (SELECT irrigation_start_time FROM variables) AND (SELECT irrigation_end_time FROM variables)
+      WHEN STRFTIME('%H:%M', last_updated_ts, 'unixepoch', 'localtime') >= (SELECT irrigation_start_time FROM variables)
+       AND STRFTIME('%H:%M', last_updated_ts, 'unixepoch', 'localtime') < (SELECT irrigation_end_time FROM variables)
         THEN MAX(0, CAST(state AS REAL) - (SELECT irrigation_flow_reduction FROM variables)) -- Subtract the reduction, ensuring it doesn't go below zero.
       -- Otherwise, just use the state's normal value.
       ELSE CAST(state AS REAL)
@@ -692,68 +706,72 @@ actions:
       without any tap/appliance flow (>= 0.25 GPM) in that same 5-minute period.
     data:
       query: |-
-        WITH b AS (
+        WITH p AS (
+          SELECT CAST(strftime('%s', 'now') AS INTEGER) / 300 * 300 AS t0
+        ),
+        b AS (
           SELECT s.start_ts,
                  s."sum" - LAG(s."sum") OVER (ORDER BY s.start_ts) AS d
             FROM statistics_short_term s
-            JOIN statistics_meta m ON s.metadata_id = m.id
+            JOIN statistics_meta m ON s.metadata_id = m.id, p
            WHERE m.statistic_id = 'sensor.water_meter_total'
-             AND s.start_ts >= strftime('%s', 'now') - 4500
-             AND s.start_ts <  strftime('%s', 'now') -  600
+             AND s.start_ts >= p.t0 - 4500
+             AND s.start_ts <  p.t0 -  600
         ),
         f AS (
           SELECT CAST(s.last_updated_ts / 300 AS INTEGER) * 300 AS bucket_ts,
                  MAX(CAST(s.state AS REAL)) AS max_flow
             FROM states s
-            JOIN states_meta sm ON s.metadata_id = sm.metadata_id
+            JOIN states_meta sm ON s.metadata_id = sm.metadata_id, p
            WHERE sm.entity_id = 'sensor.water_meter_flow'
-             AND s.last_updated_ts >= strftime('%s', 'now') - 4200
-             AND s.last_updated_ts <  strftime('%s', 'now') -  600
+             AND s.last_updated_ts >= p.t0 - 4200
+             AND s.last_updated_ts <  p.t0 -  600
              AND s.state NOT IN ('unknown', 'unavailable')
            GROUP BY bucket_ts
         )
-        SELECT (SELECT SUM(d) FROM b WHERE d > 0) AS volume_delta,
-               (SELECT COUNT(*) FROM b WHERE d > 0) AS active_periods,
-               (SELECT COUNT(*)
-                  FROM b
-                  LEFT JOIN f ON f.bucket_ts = CAST(b.start_ts AS INTEGER)
-                 WHERE b.d > 0
-                   AND b.d <= 0.15
-                   AND COALESCE(f.max_flow, 0) < 0.25) AS low_flow_periods
+        SELECT COALESCE(SUM(CASE WHEN b.d > 0 AND b.d <= 0.15 AND COALESCE(f.max_flow, 0) < 0.25 THEN b.d END), 0) AS low_flow_volume,
+               COUNT(CASE WHEN b.d > 0 AND b.d <= 0.15 AND COALESCE(f.max_flow, 0) < 0.25 THEN 1 END) AS low_flow_periods,
+               COUNT(CASE WHEN b.d > 0.15 OR COALESCE(f.max_flow, 0) >= 0.25 THEN 1 END) AS high_flow_periods
+          FROM b
+          LEFT JOIN f ON f.bucket_ts = CAST(b.start_ts AS INTEGER), p
+         WHERE b.start_ts >= p.t0 - 4200
     response_variable: sql_result
   - if:
       - condition: template
         note: >-
           Require at least 8 of the 12 five-minute periods to have strictly low-flow usage
-          and total hourly volume under 1.5 gal.
+          and average low-flow rate under 0.025 GPM (1.5 gal/hr across non-excluded periods).
         value_template: |-
           {% set row = sql_result['result'][0] %}
+          {% set mins = (12 - (row['high_flow_periods'] | int(0))) * 5 %}
           {{
-             row['volume_delta'] is not none and
-             0 < row['volume_delta'] < 1.5 and
-             row['low_flow_periods'] >= 8
+             row['low_flow_periods'] >= 8 and
+             mins > 0 and
+             0 < (row['low_flow_volume'] / mins) < 0.025
           }}
     then:
       - action: notify.nikos
         data:
           title: 💧 Slow Leak Detected
           message: >-
-            {% set row = sql_result['result'][0] %} Usage in last hour: {{
-            row['volume_delta'] | round(3) }} gal, with low-flow activity in {{
-            row['low_flow_periods'] }} of 12 five-minute periods.
+            {% set row = sql_result['result'][0] %}
+            {% set mins = (12 - (row['high_flow_periods'] | int(0))) * 5 %}
+            {% set gpm = row['low_flow_volume'] / mins %}
+            Low-flow usage in last hour: {{ row['low_flow_volume'] | round(3) }} gal across {{
+            row['low_flow_periods'] }} of {{ 12 - (row['high_flow_periods'] | int(0)) }} non-tap
+            five-minute periods ({{ row['high_flow_periods'] }} high-flow periods excluded).
 
-            That is a continuous draw of roughly {{ (row['volume_delta'] / 60) |
-            round(4) }} gal/min ({{ (row['volume_delta'] * 24) | round(1) }} gal/day).
+            That is a continuous draw of roughly {{ gpm | round(4) }} gal/min
+            ({{ (gpm * 1440) | round(1) }} gal/day).
 mode: single
 ```
 
-- The window ends 10 minutes ago because the current 5-minute statistics period isn't compiled yet; without that the automation fires twice with identical numbers.
-- The upper volume bound keeps an hour of irrigation from lighting up every period. It sits
-  above the lowest steady flow the automation above can see, so every steady leak is covered
-  by one or the other.
+- The window snaps `now` to 5-minute boundaries and ends 10 minutes ago because the current 5-minute statistics period isn't compiled yet; without that the automation fires twice with identical numbers, or includes a partial 13th bucket if delayed by a second.
+- The upper rate bound (`0.025` gal/min = `1.5` gal/hr) sits above the lowest steady flow the automation above can see, so every steady leak is covered by one or the other.
 - Each 5-minute period is checked against `sensor.water_meter_flow` in `states`: any 5-minute
-  period where a tap was opened (`>= 0.25` gal/min or `> 0.15` gal in 5 minutes) is excluded
-  from `low_flow_periods` without blinding the rest of the hour if a slow leak is also running.
+  period where a tap or toilet ran (`>= 0.25` gal/min or `> 0.15` gal in 5 minutes) is excluded
+  from both `low_flow_periods` and `low_flow_volume`, so a toilet flush neither blinds the rest
+  of the hour nor inflates the estimated leak rate.
 - The smallest leak this can find is about 8 counts an hour, so it scales with `volume_per_half_rotation` — roughly 3 gal/day on a 35 RCDL.
 
 ### Overnight Water Use Alert
@@ -814,7 +832,7 @@ actions:
                                     WHERE l.st = 'on' AND l.a <= f.t + 120 AND l.z >= f.t - 120)
                ) AS unexplained_hours,
                (SELECT COUNT(DISTINCT CAST((f.t - p.ws) / 3600 AS INTEGER)) FROM f, p) AS active_hours,
-               (SELECT ROUND(SUM(b.d), 2) FROM b, p WHERE b.ts >= p.ws) AS volume
+               (SELECT COALESCE(ROUND(SUM(b.d), 2), 0) FROM b, p WHERE b.ts >= p.ws) AS volume
     response_variable: sql_result
   - if:
       - condition: template
