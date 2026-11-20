@@ -1,6 +1,8 @@
 ---
 external_components:
-  - source: github://mazzhead/esphome-components@ee83bb9d7faadff40c1788309b442fe14cb2ddb6
+  # Temporarily use fork with ESPHome 2026.11+ fix until
+  # https://github.com/mazzhead/esphome-components/pull/4 is merged.
+  - source: github://tronikos/esphome-qmc5883p@0f912c9eac7365e40ecb15a1630a5946a28a5dd2
     components: [qmc5883p]
 
 logger:
