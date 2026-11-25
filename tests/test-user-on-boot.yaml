@@ -1,0 +1,13 @@
+---
+# Regression test for issue #136: user configs with single-mapping esphome.on_boot
+# silently overwrite list-form esphome.on_boot entries in packages during merge.
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - delay: 1s
+
+packages:
+  base: !include base.yaml
+  meter: !include ../esphome-gas-meter.yaml
+  sensor: !include ../qmc5883p.yaml

@@ -80,52 +80,9 @@ substitutions:
 
 esphome:
   min_version: "2026.5.0"
-  on_boot:
-    # Run at priority 700: after selects, numbers, and restoring globals (HARDWARE = 800)
-    # have loaded from flash, and before sensors start polling (DATA = 600) or network
-    # components wait on connections, without reordering ESP8266 preference offsets.
-    - priority: 700
-      then:
-        - lambda: |-
-            id(${prefix_id}boot_done) = true;
-            id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
-            auto ax = id(${prefix_id}axis).current_option();
-            int sel_p = (ax == "x") ? 0 : ((ax == "y") ? 1 : ((ax == "z") ? 2 : -1));
-            id(${prefix_id}active_axis) = sel_p;
-            auto alg = id(${prefix_id}detection_algorithm).current_option();
-            bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
-                              (id(${prefix_id}quad_w)[0] != 0.0f ||
-                               id(${prefix_id}quad_w)[1] != 0.0f ||
-                               id(${prefix_id}quad_w)[2] != 0.0f);
-            id(${prefix_id}active_algo) = (alg == "Threshold") ? 1 : ((alg == "Quadrature" && quad_ready) ? 2 : 0);
-            if (sel_p < 0) {
-              id(${prefix_id}calibration_status).publish_state("Not Calibrated");
-            } else {
-              id(${prefix_id}calibration_status).publish_state(
-                  (alg == "Quadrature" && !quad_ready) ? "Ready (1-axis fallback)" : "Ready");
-            }
-    # Re-seed adaptive trackers once quad_mid (setup_priority 50) has loaded from flash,
-    # since sensors (DATA = 600) start polling while Wi-Fi (250) waits to connect.
-    - priority: 40
-      then:
-        - lambda: |-
-            if (std::isnan(id(${prefix_id}quad_mid)[0]) &&
-                std::isnan(id(${prefix_id}quad_mid)[1]) &&
-                std::isnan(id(${prefix_id}quad_mid)[2])) {
-              return;
-            }
-            if (id(${prefix_id}last_pulse_ms) == 0 && id(${prefix_id}quad_steps) == 0 && !id(${prefix_id}calibrating)) {
-              id(${prefix_id}track_max) = NAN;
-              id(${prefix_id}track_min) = NAN;
-              for (int i = 0; i < 3; i++) {
-                id(${prefix_id}quad_trk_max)[i] = NAN;
-                id(${prefix_id}quad_trk_min)[i] = NAN;
-              }
-              id(${prefix_id}quad_state) = -1;
-              id(${prefix_id}quad_i_high) = false;
-              id(${prefix_id}quad_q_high) = false;
-              id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
-            }
+  # Avoid esphome.on_boot in this package: ESPHome's merge_config replaces a package's
+  # list-form on_boot with a user's single-mapping on_boot without warning. Boot state
+  # initialization is driven instead via calibration_status (setup_priority: 700).
 
 logger:
   level: INFO
@@ -203,6 +160,10 @@ globals:
     restore_value: false
     initial_value: 'false'
   - id: ${prefix_id}boot_done
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: ${prefix_id}quad_mid_applied
     type: bool
     restore_value: false
     initial_value: 'false'
@@ -532,23 +493,10 @@ select:
             }
             id(${prefix_id}quad_state) = -1;
             id(${prefix_id}quad_steps) = 0;
-            if (!id(${prefix_id}boot_done)) return;
+            if (!id(${prefix_id}calibration_status).is_ready()) return;
             id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
             id(${prefix_id}last_reverse_ms) = 0;
-            int sel_p = (x == "x") ? 0 : ((x == "y") ? 1 : ((x == "z") ? 2 : -1));
-            id(${prefix_id}active_axis) = sel_p;
-            auto alg = id(${prefix_id}detection_algorithm).current_option();
-            bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
-                              (id(${prefix_id}quad_w)[0] != 0.0f ||
-                               id(${prefix_id}quad_w)[1] != 0.0f ||
-                               id(${prefix_id}quad_w)[2] != 0.0f);
-            id(${prefix_id}active_algo) = (alg == "Threshold") ? 1 : ((alg == "Quadrature" && quad_ready) ? 2 : 0);
-            if (x == "None") {
-              id(${prefix_id}calibration_status).publish_state("Not Calibrated");
-            } else if (!id(${prefix_id}calibrating)) {
-              id(${prefix_id}calibration_status).publish_state(
-                  (alg == "Quadrature" && !quad_ready) ? "Ready (1-axis fallback)" : "Ready");
-            }
+            id(${prefix_id}calibration_status).update();
 
   - platform: template
     id: ${prefix_id}detection_algorithm
@@ -568,7 +516,7 @@ select:
         - lambda: |-
             id(${prefix_id}quad_state) = -1;
             id(${prefix_id}quad_steps) = 0;
-            if (!id(${prefix_id}boot_done)) return;
+            if (!id(${prefix_id}calibration_status).is_ready()) return;
             id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
             id(${prefix_id}last_pulse_ms) = 0;
             id(${prefix_id}last_reverse_ms) = 0;
@@ -576,24 +524,42 @@ select:
             id(${prefix_id}iv1) = 0;
             id(${prefix_id}iv2) = 0;
             for (int i = 0; i < 4; i++) id(${prefix_id}quad_t)[i] = 0;
-            int sel_p = id(${prefix_id}active_axis);
-            bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
-                              (id(${prefix_id}quad_w)[0] != 0.0f ||
-                               id(${prefix_id}quad_w)[1] != 0.0f ||
-                               id(${prefix_id}quad_w)[2] != 0.0f);
-            id(${prefix_id}active_algo) = (x == "Threshold") ? 1 : ((x == "Quadrature" && quad_ready) ? 2 : 0);
-            if (sel_p >= 0 && !id(${prefix_id}calibrating)) {
-              id(${prefix_id}calibration_status).publish_state(
-                  (x == "Quadrature" && !quad_ready) ? "Ready (1-axis fallback)" : "Ready");
-            }
+            id(${prefix_id}calibration_status).update();
 
 text_sensor:
+  # setup_priority 700 runs after selects, numbers, and restoring globals (HARDWARE = 800)
+  # load from flash and before sensors start polling (DATA = 600), without using esphome.on_boot
+  # or changing setup_priority on restoring components (preserving ESP8266 flash offsets).
   - platform: template
     id: ${prefix_id}calibration_status
     name: ${prefix_name}Calibration Status
     entity_category: diagnostic
     icon: mdi:information-outline
+    setup_priority: 700
     update_interval: never
+    lambda: |-
+      if (!id(${prefix_id}boot_done)) {
+        id(${prefix_id}boot_done) = true;
+        id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
+      }
+      auto ax = id(${prefix_id}axis).current_option();
+      int sel_p = (ax == "x") ? 0 : ((ax == "y") ? 1 : ((ax == "z") ? 2 : -1));
+      id(${prefix_id}active_axis) = sel_p;
+      auto alg = id(${prefix_id}detection_algorithm).current_option();
+      bool quad_ready = sel_p >= 0 && id(${prefix_id}quad_c)[sel_p] == 1.0f &&
+                        (id(${prefix_id}quad_w)[0] != 0.0f ||
+                         id(${prefix_id}quad_w)[1] != 0.0f ||
+                         id(${prefix_id}quad_w)[2] != 0.0f);
+      id(${prefix_id}active_algo) = (alg == "Threshold") ? 1 : ((alg == "Quadrature" && quad_ready) ? 2 : 0);
+      if (id(${prefix_id}calibrating)) return {};
+      const char *status = (sel_p < 0)
+          ? "Not Calibrated"
+          : ((alg == "Quadrature" && !quad_ready) ? "Ready (1-axis fallback)" : "Ready");
+      if (id(${prefix_id}calibration_status).has_state() &&
+          id(${prefix_id}calibration_status).state == status) {
+        return {};
+      }
+      return std::string(status);
 
   - platform: template
     id: ${prefix_id}flow_direction
@@ -718,6 +684,7 @@ button:
                   id(${prefix_id}quad_trk_max)[i] = NAN;
                   id(${prefix_id}quad_trk_min)[i] = NAN;
                 }
+                id(${prefix_id}quad_mid_applied) = true;
                 float gp = (var[p] > 0.0f) ? fminf(0.5f, d2var[p] / var[p]) : 0.0f;
                 float svar[3];
                 for (int i = 0; i < 3; i++) {
@@ -947,6 +914,29 @@ sensor:
       on_raw_value:
         then:
           - lambda: |-
+              if (!id(${prefix_id}boot_done)) {
+                id(${prefix_id}calibration_status).update();
+              }
+              // Re-seed adaptive trackers once quad_mid (setup_priority 50) has loaded from flash,
+              // since sensors (DATA = 600) start polling while Wi-Fi (250) waits to connect.
+              if (!id(${prefix_id}quad_mid_applied) &&
+                  (!std::isnan(id(${prefix_id}quad_mid)[0]) ||
+                   !std::isnan(id(${prefix_id}quad_mid)[1]) ||
+                   !std::isnan(id(${prefix_id}quad_mid)[2]))) {
+                id(${prefix_id}quad_mid_applied) = true;
+                if (id(${prefix_id}last_pulse_ms) == 0 && id(${prefix_id}quad_steps) == 0 && !id(${prefix_id}calibrating)) {
+                  id(${prefix_id}track_max) = NAN;
+                  id(${prefix_id}track_min) = NAN;
+                  for (int i = 0; i < 3; i++) {
+                    id(${prefix_id}quad_trk_max)[i] = NAN;
+                    id(${prefix_id}quad_trk_min)[i] = NAN;
+                  }
+                  id(${prefix_id}quad_state) = -1;
+                  id(${prefix_id}quad_i_high) = false;
+                  id(${prefix_id}quad_q_high) = false;
+                  id(${prefix_id}quad_net_max) = (long) id(${prefix_id}half_rotations_total) * 4L;
+                }
+              }
               bool ok = (x >= ${min_valid_field_ut});
               id(${prefix_id}cal_burst_ok) = ok;
               if (!ok) return;
@@ -1271,6 +1261,9 @@ sensor:
     id: ${prefix_id}sensor_total
     name: ${prefix_name}Total
     lambda: |-
+      if (!id(${prefix_id}boot_done) && id(${prefix_id}calibration_status).is_ready()) {
+        id(${prefix_id}calibration_status).update();
+      }
       bool failed = id(${prefix_id}qmc5883l_id).is_failed() || !id(${prefix_id}sensor_alive);
       id(${prefix_id}magnetometer_problem).publish_state(failed);
       if (failed) {
